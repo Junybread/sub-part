@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>부자재 취합 시스템 - 관리자</title>
+
+<!-- Supabase 클라이언트 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background:#f4f6f8;
+}
+.container {
+  width: 900px;
+  margin: 30px auto;
+  background:#fff;
+  padding:20px;
+}
+h2 {
+  margin-bottom:20px;
+}
+.section {
+  border:1px solid #ccc;
+  padding:15px;
+  margin-bottom:20px;
+}
+.section h3 {
+  margin-bottom:10px;
+}
+button {
+  padding:8px 14px;
+  background:#2c7be5;
+  color:#fff;
+  border:none;
+  cursor:pointer;
+}
+button:hover {
+  background:#1a68d1;
+}
+.btn-logout {
+  background:#6c757d !important;
+  margin-left:15px;
+  font-size:13px;
+}
+.btn-logout:hover {
+  background:#5a6268 !important;
+}
+input[type="file"] {
+  margin-top:8px;
+}
+</style>
+</head>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<body>
+
+<div class="container">
+  <h2 style="display:inline-block;">관리자 페이지</h2>
+  <button type="button" class="btn-logout" onclick="logout()">로그아웃</button>
+
+  <!-- 1. 지점 계정 + T/O 업로드 -->
+  <div class="section">
+    <h3>① 지점 계정 / T·O 데이터 업로드</h3>
+    <p>형식: 엑셀 (지점ID, 지점명, T/O, 예상계정수)</p>
+    <input type="file" id="branchUpload" accept=".xlsx,.xls">
+    <button onclick="uploadBranch()">업로드</button>
+  </div>
+
+  <!-- 2. 전월 신청 데이터 업로드 -->
+  <div class="section">
+    <h3>② 전월 신청 데이터 업로드</h3>
+    <p>형식: 엑셀 (지점별 신청 내역)</p>
+    <input type="file" id="prevMonthUpload" accept=".xlsx,.xls">
+    <button onclick="uploadPrevMonth()">업로드</button>
+  </div>
+
+  <!-- 3. 계정 관리 -->
+  <div class="section">
+    <h3>③ 아이디 / 비밀번호 관리</h3>
+    <p>※ 1차 단계에서는 JS 객체 기반 관리</p>
+    <button onclick="alert('2차 단계에서 구현')">계정 관리</button>
+  </div>
+
+  <!-- 4. 당월 데이터 다운로드 -->
+  <div class="section">
+    <h3>④ 당월 신청 데이터 다운로드</h3>
+    <button onclick="downloadExcel()">엑셀 다운로드</button>
+  </div>
+
+  <!-- 5. 데이터 초기화 -->
+  <div class="section">
+    <h3>⑤ 당월 신청 데이터 초기화</h3>
+    <p style="color:red;">※ 주의: 모든 지점의 당월 신청 데이터가 삭제됩니다!</p>
+    <button onclick="resetCurrentMonthData()" style="background:#dc3545 !important;">당월 데이터 초기화</button>
+  </div>
+
+<div class="section">
+  <h3>⑥ 업로드된 지점 계정 목록</h3>
+
+  <table id="userTable" border="1" style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr style="background:#1f3a5a; color:#fff;">
+        <th>지점ID</th>
+        <th>지점명</th>
+        <th>권한</th>
+        <th>T/O</th>
+        <th>예상계정수</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+/* 🔒 관리자 권한 체크 */
+document.addEventListener('DOMContentLoaded', () => {
+
+  const loginId   = localStorage.getItem('loginId');
+  const loginRole = localStorage.getItem('loginRole');
+
+  if (!loginId || loginRole !== 'admin') {
+    alert('관리자만 접근 가능합니다.');
+    location.href = 'login.html';
+    return;
+  }
+
+  const users = JSON.parse(localStorage.getItem('USERS') || '{}');
+
+  if (!users.admin) {
+    users.admin = {
+      password: '0000',
+      branchName: '관리자',
+      role: 'admin',
+      acct: 0,
+      to: 0
+    };
+    localStorage.setItem('USERS', JSON.stringify(users));
+  }
+
+  if (!users[loginId]) {
+    alert('사용자 정보를 불러올 수 없습니다.');
+    location.href = 'login.html';
+    return;
+  }
+
+  console.log('✅ 관리자 로그인 성공');
+  if (typeof supabase !== 'undefined') {
+    renderUserTable();
+  } else {
+    setTimeout(() => renderUserTable(), 100);
+  }
+});
+
+function logout() {
+  localStorage.clear();
+  location.href = 'login.html';
+}
+
+
+
+/* 파일 검증: 확장자 .xlsx .xls, 최대 5MB */
+function validateExcelFile(file) {
+  const name = (file.name || '').toLowerCase();
+  if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
+    alert('엑셀 파일(.xlsx, .xls)만 업로드 가능합니다.');
+    return false;
+  }
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  if (file.size > maxSize) {
+    alert('파일 크기는 5MB 이하여야 합니다.');
+    return false;
+  }
+  return true;
+}
+
+/* 1️⃣ 지점 계정 업로드 */
+async function uploadBranch() {
+  const fileInput = document.getElementById('branchUpload');
+  const file = fileInput.files[0];
+  if (!file) { alert('엑셀 파일을 선택하세요.'); return; }
+  if (!validateExcelFile(file)) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).map(row => {
+      const clean = {};
+      Object.keys(row).forEach(key => { clean[key.trim()] = row[key]; });
+      return clean;
+    });
+
+    try {
+      let successCount = 0, errorCount = 0;
+      for (const row of rows) {
+        const username = String(row['아이디'] || '').trim();
+        if (!username || username === 'admin') continue;
+        try {
+          const { error } = await supabase.from('users').upsert({
+            username: username,
+            password: String(row['패스워드'] || '1234').trim(),
+            branch_name: String(row['지점명'] || '').trim(),
+            role: String(row['등급'] || 'user').trim().toLowerCase(),
+            acct: Number(row['계정'] || 0),
+            to_count: Number(row['T/O'] || 0)
+          }, { onConflict: 'username' });
+          if (error) { console.error('업로드 오류 ('+username+'):', error); errorCount++; }
+          else successCount++;
+        } catch (err) { console.error('업로드 오류 ('+username+'):', err); errorCount++; }
+      }
+      alert(`지점 계정 업로드 완료!
+성공: ${successCount}개
+실패: ${errorCount}개`);
+      if (typeof supabase !== 'undefined') {
+    renderUserTable();
+  } else {
+    setTimeout(() => renderUserTable(), 100);
+  }
+    } catch (error) {
+      console.error('업로드 오류:', error);
+      alert('업로드 중 오류가 발생했습니다.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* 2️⃣ 전월 데이터 업로드 */
+function uploadPrevMonth() {
+  const file = document.getElementById('prevMonthUpload').files[0];
+  if (!file) {
+    alert('파일을 선택하세요.');
+    return;
+  }
+  if (!validateExcelFile(file)) return;
+
+  alert('전월 데이터 업로드(엑셀 파싱은 다음 단계)');
+}
+
+/* 3️⃣ 당월 데이터 다운로드 (지점 × 항목 매트릭스 형태) */
+async function downloadExcel() {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = now.getMonth() + 1;
+
+  try {
+    const [appResult, hoodResult, etcResult, usersResult] = await Promise.all([
+      supabase.from('applications').select('*').eq('year', year).eq('month', month),
+      supabase.from('hood_applications').select('*').eq('year', year).eq('month', month),
+      supabase.from('etc_applications').select('*').eq('year', year).eq('month', month),
+      supabase.from('users').select('*')
+    ]);
+
+    if (appResult.error) throw appResult.error;
+    if (hoodResult.error) throw hoodResult.error;
+    if (etcResult.error) throw etcResult.error;
+    if (usersResult.error) throw usersResult.error;
+
+    const applications = appResult.data || [];
+    const hoodApps = hoodResult.data || [];
+    const etcApps = etcResult.data || [];
+    const users = usersResult.data || [];
+
+    const userMap = {};
+    users.forEach(u => { userMap[u.username] = u; });
+
+    const branchIds = new Set([
+      ...applications.map(a => a.branch_id),
+      ...hoodApps.map(h => h.branch_id),
+      ...etcApps.map(e => e.branch_id)
+    ]);
+
+    if (branchIds.size === 0) {
+      alert('다운로드할 당월 신청 데이터가 없습니다.');
+      return;
+    }
+
+    const itemNameSet = new Set();
+    applications.forEach(app => {
+      if (app.items && Array.isArray(app.items)) {
+        app.items.forEach(item => {
+          const name = (item.itemName || '').trim();
+          if (name) itemNameSet.add(name);
+        });
+      }
+    });
+
+    const itemCols = Array.from(itemNameSet);
+    const hoodCols = ['PB-1 세정제 (600ml)','은박테이프','알루미늄 후렉시블(100mm×10M)','환기자재 레듀샤(125mm-100mm)','서비스봉투(100EA,1묶음)','전기레인지 폼테이프(4EA,1SET)'];
+    const etcCols = ['배수통 잔여수량','배수호스 잔여수량','트레인피팅 잔여수량','트레인피팅 요청수량','단열재 잔여수량','CP-AJS 배수호스(롤)'];
+
+    const header = ['지점ID', '지점명', '연도', '월'].concat(itemCols).concat(hoodCols).concat(etcCols);
+    const rows = [header];
+
+    Array.from(branchIds).forEach(branchId => {
+      const user = userMap[branchId] || {};
+      const row = [branchId, user.branch_name || branchId, year, month];
+
+      const app = applications.find(a => a.branch_id === branchId);
+      const itemApplyMap = {};
+      if (app && Array.isArray(app.items)) {
+        app.items.forEach(item => {
+          const name = (item.itemName || '').trim();
+          if (name) itemApplyMap[name] = Number(item.apply || 0);
+        });
+      }
+      itemCols.forEach(name => { row.push(itemApplyMap[name] || 0); });
+
+      const hood = hoodApps.find(h => h.branch_id === branchId) || {};
+      row.push(hood.pb1||0, hood.tape||0, hood.flex||0, hood.reducer||0, hood.service_bag||0, hood.form_tape||0);
+
+      const etc = etcApps.find(e => e.branch_id === branchId) || {};
+      row.push(etc.drain_tank_remain||0, etc.drain_hose_remain||0, etc.train_remain||0, etc.train_request||0, etc.insulation_remain||0, etc.cp_ajs_roll||0);
+
+      rows.push(row);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '부자재신청현황');
+    const fileName = `부자재_당월신청_${year}년${month}월.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  } catch (error) {
+    console.error('다운로드 오류:', error);
+    alert('다운로드 중 오류가 발생했습니다.');
+  }
+}
+
+async function renderUserTable() {
+  const tbody = document.querySelector('#userTable tbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">불러오는 중...</td></tr>';
+
+  try {
+    const { data: users, error } = await supabase.from('users').select('*').order('username');
+    if (error) throw error;
+
+    tbody.innerHTML = '';
+    if (!users || users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">업로드된 지점 계정이 없습니다.</td></tr>';
+      return;
+    }
+
+    users.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${u.username}</td><td>${u.branch_name || '-'}</td><td>${u.role || 'user'}</td><td>${u.to_count || 0}</td><td>${u.acct || 0}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (error) {
+    console.error('테이블 렌더링 오류:', error);
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">불러오기 실패</td></tr>';
+  }
+}
+
+/* 당월 데이터 초기화 함수 */
+async function resetCurrentMonthData() {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = now.getMonth() + 1;
+
+  if (!confirm(`정말로 ${year}년 ${month}월 모든 지점의 신청 데이터를 초기화하시겠습니까?
+
+이 작업은 되돌릴 수 없습니다!`)) return;
+  if (!confirm('정말 진행하시겠습니까? (최종 확인)')) return;
+
+  try {
+    const [appResult, hoodResult, etcResult] = await Promise.all([
+      supabase.from('applications').delete().eq('year', year).eq('month', month),
+      supabase.from('hood_applications').delete().eq('year', year).eq('month', month),
+      supabase.from('etc_applications').delete().eq('year', year).eq('month', month)
+    ]);
+
+    if (appResult.error) throw appResult.error;
+    if (hoodResult.error) throw hoodResult.error;
+    if (etcResult.error) throw etcResult.error;
+
+    console.log('🗑️ 데이터 초기화 완료');
+    alert(`${year}년 ${month}월 데이터 초기화가 완료되었습니다.`);
+  } catch (error) {
+    console.error('초기화 오류:', error);
+    alert('데이터 초기화 중 오류가 발생했습니다.');
+  }
+}
+
+</script></body>
+</html>
