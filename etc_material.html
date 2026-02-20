@@ -43,8 +43,8 @@
         <th>설치법인명</th>
         <th>배수통 잔여수량</th>
         <th>배수호스 잔여수량</th>
-        <th>트레인피팅 잔여수량</th>
-        <th>트레인피팅 요청수량</th>
+        <th>드레인피팅 잔여수량</th>
+        <th>드레인피팅 요청수량</th>
         <th>단열재 잔여수량</th>
         <th>CP-AJS 배수호스(단위:롤)</th>
       </tr>
@@ -55,7 +55,6 @@
         <td><input type="number" id="drainTankRemain" min="0" value="0"></td>
         <td><input type="number" id="drainHoseRemain" min="0" value="0"></td>
         <td><input type="number" id="trainRemain" min="0" value="0"></td>
-        <td><input type="number" id="trainRequest" min="0" value="0"></td>
         <td><input type="number" id="insulationRemain" min="0" value="0"></td>
         <td><input type="number" id="cpAjsRoll" min="0" value="0"></td>
       </tr>
@@ -64,7 +63,6 @@
         <td id="sumDrainTankRemain">0</td>
         <td id="sumDrainHoseRemain">0</td>
         <td id="sumTrainRemain">0</td>
-        <td id="sumTrainRequest">0</td>
         <td id="sumInsulationRemain">0</td>
         <td id="sumCpAjsRoll">0</td>
       </tr>
@@ -114,14 +112,12 @@ function calcSum() {
   const drainTankRemain = parseInt(document.getElementById('drainTankRemain').value, 10) || 0;
   const drainHoseRemain = parseInt(document.getElementById('drainHoseRemain').value, 10) || 0;
   const trainRemain = parseInt(document.getElementById('trainRemain').value, 10) || 0;
-  const trainRequest = parseInt(document.getElementById('trainRequest').value, 10) || 0;
   const insulationRemain = parseInt(document.getElementById('insulationRemain').value, 10) || 0;
   const cpAjsRoll = parseInt(document.getElementById('cpAjsRoll').value, 10) || 0;
 
   document.getElementById('sumDrainTankRemain').textContent = drainTankRemain;
   document.getElementById('sumDrainHoseRemain').textContent = drainHoseRemain;
   document.getElementById('sumTrainRemain').textContent = trainRemain;
-  document.getElementById('sumTrainRequest').textContent = trainRequest;
   document.getElementById('sumInsulationRemain').textContent = insulationRemain;
   document.getElementById('sumCpAjsRoll').textContent = cpAjsRoll;
 }
