@@ -188,17 +188,18 @@ async function saveData() {
   const month = now.getMonth() + 1;
 
   const payload = {
-    user_id: userId,
-    branch_id: branchId,
-    branch_name: branchName || '',
-    year: year,
-    month: month,
-    drain_tank_remain: parseInt(document.getElementById('drainTankRemain').value, 10) || 0,
-    drain_hose_remain: parseInt(document.getElementById('drainHoseRemain').value, 10) || 0,
-    train_remain: parseInt(document.getElementById('trainRemain').value, 10) || 0,
-    insulation_remain: parseInt(document.getElementById('insulationRemain').value, 10) || 0,
-    cp_ajs_roll: parseInt(document.getElementById('cpAjsRoll').value, 10) || 0
-  };
+  user_id: userId,
+  branch_id: branchId,
+  branch_name: branchName || '',
+  year: year,
+  month: month,
+  drain_tank_remain: parseInt(document.getElementById('drainTankRemain').value, 10) || 0,
+  drain_hose_remain: parseInt(document.getElementById('drainHoseRemain').value, 10) || 0,
+  train_remain: parseInt(document.getElementById('trainRemain').value, 10) || 0,
+  train_request: 0,  // ⬅️ 이 줄 추가! (데이터베이스 필드에 맞춤)
+  insulation_remain: parseInt(document.getElementById('insulationRemain').value, 10) || 0,
+  cp_ajs_roll: parseInt(document.getElementById('cpAjsRoll').value, 10) || 0
+};
 
   saveBtn.disabled = true;
   saveBtn.textContent = '저장 중...';
