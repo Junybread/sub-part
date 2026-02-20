@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('input[type="number"]').forEach(function(inp) {
     inp.addEventListener('input', calcSum);
   });
+  
   calcSum();
 });
 
@@ -157,7 +158,6 @@ async function loadData() {
     document.getElementById('drainTankRemain').value = data.drain_tank_remain || 0;
     document.getElementById('drainHoseRemain').value = data.drain_hose_remain || 0;
     document.getElementById('trainRemain').value = data.train_remain || 0;
-    document.getElementById('trainRequest').value = data.train_request || 0;
     document.getElementById('insulationRemain').value = data.insulation_remain || 0;
     document.getElementById('cpAjsRoll').value = data.cp_ajs_roll || 0;
 
@@ -196,7 +196,6 @@ async function saveData() {
     drain_tank_remain: parseInt(document.getElementById('drainTankRemain').value, 10) || 0,
     drain_hose_remain: parseInt(document.getElementById('drainHoseRemain').value, 10) || 0,
     train_remain: parseInt(document.getElementById('trainRemain').value, 10) || 0,
-    train_request: parseInt(document.getElementById('trainRequest').value, 10) || 0,
     insulation_remain: parseInt(document.getElementById('insulationRemain').value, 10) || 0,
     cp_ajs_roll: parseInt(document.getElementById('cpAjsRoll').value, 10) || 0
   };
