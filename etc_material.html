@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('input[type="number"]').forEach(function(inp) {
     inp.addEventListener('input', calcSum);
   });
+  calcSum();
 });
 
 function calcSum() {
