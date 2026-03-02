@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>부자재 신청 현황</title>
+
+<!-- Supabase 클라이언트 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// Supabase 설정
+const SUPABASE_URL = 'https://yhuvkxuzolhpnzzbpigr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Ka0LELW2NrPf3q3dyO1Usg_EHYTS31K';
+var supabaseClient = null;
+</script>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background:#f4f6f8;
+    }
+    .container {
+        width: 98%;
+        margin: 20px auto;
+        background: #fff;
+        padding: 15px;
+    }
+
+.top-buttons {
+  position: absolute;
+  top: 90px;
+  right: 30px;
+}
+
+.top-buttons button {
+  margin-left: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: #1f3a5a;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.top-buttons button:hover {
+  background: #16304a;
+}
+.btn-save {
+  background: #28a745 !important;
+}
+.btn-save:hover {
+  background: #218838 !important;
+}
+.btn-password {
+  background: #ff9800 !important;
+  color: #fff !important;
+}
+.btn-password:hover {
+  background: #f57c00 !important;
+}
+.btn-logout {
+  background: #6c757d !important;
+}
+.btn-logout:hover {
+  background: #5a6268 !important;
+}
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    th, td {
+        border: 1px solid #000;
+        padding: 4px;
+        text-align: center;
+        white-space: nowrap;
+    }
+    th {
+        background: #1f3a5a;
+        color: #fff;
+        font-weight: normal;
+    }
+    .yellow {
+        background: #ffff00;
+    }
+    .left {
+        text-align: left;
+    }
+    input[type="number"] {
+        width: 70px;
+        padding: 2px;
+        background: #ffff00;
+        text-align: center;
+    }
+    .total {
+        background: #e6e6e6;
+        font-weight: bold;
+    }
+</style>
+</head>
+
+<body>
+<div class="container">
+<h3> <span id="yearnum"></span>년
+  <span id="nextmonthnum"></span>월 부자재 신청
+</h3>
+
+<!-- 지점명 -->
+<div style="margin-bottom:10px;">
+  <label>설치법인명 :</label>
+  <span id="branchName" readonly></span>
+</div>
+
+<div class="top-buttons">
+  <button type="button" class="btn-save" onclick="saveData(event); return false;">저장</button>
+  <button type="button" onclick="goPage('service_hood.html')">서비스봉투/주방후드</button>
+  <button type="button" onclick="goPage('etc_material.html')">기타 부자재 보유현황</button>
+  <button type="button" class="btn-password" onclick="showPasswordChange()">패스워드 변경</button>
+  <button type="button" class="btn-logout" onclick="logout()">로그아웃</button>
+</div>
+
+<!-- 패스워드 변경 모달 -->
+<div id="passwordModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+  <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:30px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.2); width:350px;">
+    <h3 style="margin-top:0;">패스워드 변경</h3>
+    <div style="margin-bottom:15px;">
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">현재 패스워드</label>
+      <input type="password" id="currentPassword" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+    </div>
+    <div style="margin-bottom:15px;">
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">새 패스워드</label>
+      <input type="password" id="newPassword" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="display:block; margin-bottom:5px; font-weight:bold;">새 패스워드 확인</label>
+      <input type="password" id="confirmPassword" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+    </div>
+    <div style="text-align:right;">
+      <button onclick="hidePasswordChange()" style="margin-right:8px; padding:8px 16px; background:#6c757d; color:white; border:none; border-radius:4px; cursor:pointer;">취소</button>
+      <button onclick="changePassword()" style="padding:8px 16px; background:#28a745; color:white; border:none; border-radius:4px; cursor:pointer;">변경</button>
+    </div>
+  </div>
+</div>
+
+<table>
+<colgroup>
+    <col style="width:60px;">   <!-- 구분 -->
+    <col style="width:180px;">  <!-- 항목 -->
+    <col style="width:60px;">   <!-- 기준수량 -->
+    <col style="width:90px;">   <!-- 예상계정수 -->
+    <col style="width:70px;">   <!-- 인원 T/O -->
+    <col style="width:80px;">   <!-- 필요수량 -->
+    <col style="width:160px;">  <!-- 장부재고 -->
+    <col style="width:70px;">   <!-- 과부족 -->
+    <col style="width:80px;">   <!-- 신청수량(PACK) -->
+    <col style="width:90px;">   <!-- 신청수량(EA) -->
+    <col style="width:90px;">   <!-- 익월재고 -->
+    <col style="width:90px;">   <!-- 비고 -->
+</colgroup>
+
+<thead>
+<tr>
+    <th rowspan="3">구분</th>
+    <th rowspan="3">항목</th>
+    <th colspan="4">기 준</th>
+    <th rowspan="2" colspan="2">현 보유재고</th>
+
+    <th rowspan="3">과부족</th>
+    <th colspan="3">신 청</th>
+    <th rowspan="3">비고</th>
+</tr>
+<tr>
+    <th>기준수량</th>
+    <th>3월예상계정수</th>
+    <th>인원 T/O</th>
+    <th>필요수량</th>
+    <th colspan="2">신청수량</th>
+    <th rowspan="2">익월<br>장부재고</th>
+    </tr>
+<tr>
+    <th>(EA)</th>
+    <th>(건)</th>
+    <th>(명)</th>
+    <th>(EA)</th>
+    <th colspan="2">(EA)</th>
+    <th>(PACK)</th>
+    <th>(EA)</th>
+</tr>
+</thead>
+
+<script>
+// 월 표시 즉시 실행
+(function() {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const nextMonth = (now.getMonth() + 2) > 12 ? 1 : (now.getMonth() + 2);
+  
+  const yearElem = document.getElementById("yearnum");
+  const monthElem = document.getElementById("nextmonthnum");
+  
+  if (yearElem) yearElem.textContent = year;
+  if (monthElem) monthElem.textContent = nextMonth;
+})();
+</script>
+
+<tbody>
+<tr class="tubing1p">
+    <td rowspan="23">잡자재</td>
+    <td class="left">튜빙선(1P)</td>
+    <td class="std">3</td>
+    <td rowspan="23" class="yellow acctAll">2985</td>
+    <td rowspan="23" class="toAll">16</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+     <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1롤 : 100M 여유분지급</td>
+</tr>
+
+<tr class="tubing2p">
+    <td class="left">튜빙선(2P)</td>
+    <td class="std">5</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1롤 : 50M</td>
+</tr>
+
+<tr>
+    <td class="left">튜빙선(1P, 3/8)</td>
+    <td></td>
+    <td></td>
+    <td colspan="2"><input type="number" min=0 data-field="stock"></td>
+    <td></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1롤 : 50M (POU전용)</td>
+</tr>
+
+<tr>
+    <td class="left">튜빙선_ACS (LLD T/B 1/2)</td>
+    <td></td>
+    <td></td>
+    <td colspan="2"><input type="number" min=0 data-field="stock"></td>
+    <td></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td></td>
+    <td class="left">1롤 : 50M (ACS툴 전용)</td>
+</tr>
+
+<tr class="teflon">
+    <td class="left">테프론</td>
+    <td>3</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">인당 3EA(월)</td>
+</tr>
+
+<tr class="rabbit">
+    <td class="left">토끼코크</td>
+    <td>2</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">인당 2EA(월)</td>
+</tr>
+
+<tr class="screw">
+    <td class="left">피스</td>
+    <td>3</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="steelscrew">
+    <td class="left">철판피스</td>
+    <td>1</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="fixed">
+    <td class="left">새들(4N)</td>
+    <td>5</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="fixed1">
+    <td class="left">새들(6N)</td>
+    <td>5</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+
+<tr class="cabletie1">
+    <td class="left">케이블타이(대)</td>
+    <td>5</td>
+    <td class="need"></td>
+   <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="cabletie2">
+    <td class="left">케이블타이(소)</td>
+    <td>5</td>
+    <td class="need"></td>
+   <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="mbase">
+    <td class="left">마운팅베이스</td>
+    <td>10</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="nipple">
+    <td class="left">단 니플</td>
+    <td>2</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">20EA</b></td>
+</tr>
+
+<tr class="nipple1">
+    <td class="left">연결니플</td>
+    <td>5</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">20EA</b></td>
+</tr>
+
+<tr class="tape">
+    <td class="left">전기테이프</td>
+    <td>2</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">인당 <b style="color:red">3EA(월)</b></td>
+</tr>
+
+<tr class="cuban">
+    <td class="left">배수용큐방</td>
+    <td>10</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">1000EA</b></td>
+</tr>
+
+<tr class="anchor">
+    <td class="left">천공앙카</td>
+    <td>2</td>
+    <td class="need"></td>
+    <td colspan="2" class="stock">
+    <input type="number" min="0" class="only-number" data-field="stock">
+    </td>
+    <td class="shortage"></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">10EA</b></td>
+</tr>
+
+<tr class="high-strength-2">
+    <td class="left">신형고강도(흰색) 2호</td>
+    <td></td>
+    <td></td>
+    <td colspan="2"><input type="number" min="0" data-field="stock"></td>
+    <td></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">100EA</b></td>
+</tr>
+
+<tr class="high-strength-3">
+    <td class="left">신형고강도(흰색) 3호</td>
+    <td></td>
+    <td></td>
+    <td colspan="2"><input type="number" min="0" data-field="stock"></td>
+    <td></td>
+    <td></td>
+    <td class="yellow"><input type="number" min="0" data-field="apply"></td>
+    <td class="next-stock"></td>
+    <td class="left">1PACK <b style="color:red">70EA</b></td>
+</tr>
+
+
+<tr class="drytissue">
+  <td class="left">건식티슈</td>
+  <td></td>
+  <td class="need"></td>
+<td>
+  <input type="number" min="0" class="pack-stock" data-field="packStock"> PACK
+</td>
+<td class="stock-ea"></td>
+<td class="shortage"></td>
+<td>
+  <input type="number" min="0" class="pack-apply" data-field="packApply"> PACK
+</td>
+<td class="apply-ea"></td>
+<td class="next-stock"></td>
+  <td class="left">
+    1BOX : <b style="color:red">100PACK</b>(1PACK 20EA)
+  </td>
+</tr>
+
+<tr class="wettissue">
+    <td class="left">습식티슈</td>
+    <td></td>
+  <td class="need"></td>
+<td>
+  <input type="number" min="0" class="pack-stock" data-field="packStock"> PACK
+</td>
+<td class="stock-ea"></td>
+<td class="shortage"></td>
+<td>
+  <input type="number" min="0" class="pack-apply" data-field="packApply"> PACK
+</td>
+<td class="apply-ea"></td>
+<td class="next-stock"></td>
+    <td class="left">1BOX : <b style="color:red">50PACK</b>(1PACK 50EA)</td>
+</tr>
+
+<tr class="glove">
+    <td class="left">위생장갑</td>
+    <td></td>
+    <td class="need"></td>
+<td>
+  <input type="number" min="0" class="pack-stock" data-field="packStock"> PACK
+</td>
+<td class="stock-ea"></td>
+<td class="shortage"></td>
+<td>
+  <input type="number" min="0" class="pack-apply" data-field="packApply"> PACK
+</td>
+<td class="apply-ea"></td>
+<td class="next-stock"></td>
+
+    <td class="left">1BOX : <b style="color:red">30PACK</b>(1PACK 200EA)</td>
+</tr>
+
+
+<tr class="total">
+  <td colspan="4">필요자재 계</td>
+  <td></td>
+  <td id="totalNeed">0</td>
+  <td id="totalStock">0</td>
+  <td></td>
+  <td id="totalShortage">0</td>
+  <td></td>
+  <td id="totalApply">0</td>
+  <td id="totalNextStock">0</td>
+  <td></td>
+</tr>
+
+</tbody>
+</table>
+</div>
+
+<script>
+
+/* 페이지 로드 시 초기화 */
+document.addEventListener('DOMContentLoaded', async function(){
+  // Supabase 초기화
+  if (typeof window.supabase !== 'undefined') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Supabase 초기화 완료');
+  } else {
+    console.error('❌ Supabase 라이브러리 로드 실패');
+  }
+
+  const role = localStorage.getItem('loginRole');
+  if (role !== 'user') {
+    alert('접근 권한이 없습니다.');
+    location.href = 'login.html';
+    return;
+  }
+
+  const branchId = localStorage.getItem('loginId');
+  const branchName = localStorage.getItem('loginBranch');
+  
+  if (!branchId || !branchName) {
+    alert('로그인 정보를 불러올 수 없습니다.');
+    location.href = 'login.html';
+    return;
+  }
+
+  document.getElementById('branchName').textContent = branchName;
+
+  // Supabase에서 acct, to 가져오기 (완료될 때까지 대기)
+  await loadUserInfo();
+
+  // 저장된 데이터 불러오기
+  await loadData();
+
+  // 마감 상태 확인 후 잠금 처리
+  await checkAndApplyDeadlock();
+
+  // 입력 이벤트 리스너 등록
+  document.querySelectorAll('input[type="number"]').forEach(function(inp) {
+    inp.addEventListener('input', recalc);
+  });
+
+  // 초기 계산 (이제 acct와 to가 로드된 후 실행됨)
+  recalc();
+  
+  // 신형고강도 홀수 월 체크
+  checkHighStrengthMonth();
+});
+
+/* 페이지 이동 */
+function goPage(url) {
+  location.href = url;
+}
+
+/* 로그아웃 */
+function logout() {
+  localStorage.clear();
+  location.href = 'login.html';
+}
+
+/* 마감 상태 확인 및 잠금 처리 */
+async function checkAndApplyDeadlock() {
+  if (!supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from('settings')
+      .select('value')
+      .eq('key', 'is_closed')
+      .single();
+
+    const isClosed = data && data.value === 'true';
+    if (isClosed) {
+      applyLock();
+    }
+  } catch (e) {
+    console.warn('마감 상태 확인 실패:', e);
+  }
+}
+
+function applyLock() {
+  // 모든 입력 비활성화
+  document.querySelectorAll('input[type="number"]').forEach(function(inp) {
+    inp.disabled = true;
+    inp.style.backgroundColor = '#e0e0e0';
+    inp.style.cursor = 'not-allowed';
+  });
+
+  // 저장 버튼 비활성화
+  document.querySelectorAll('.btn-save').forEach(function(btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    btn.title = '마감되어 저장할 수 없습니다.';
+  });
+
+  // 마감 안내 배너 표시
+  const banner = document.createElement('div');
+  banner.id = 'closedBanner';
+  banner.style.cssText = 'background:#dc3545; color:white; text-align:center; padding:10px; font-size:14px; font-weight:bold; margin-bottom:10px; border-radius:4px;';
+  banner.textContent = '🔒 신청이 마감되었습니다. 현재 입력 및 수정이 불가합니다.';
+
+  const container = document.querySelector('.container');
+  const h3 = container.querySelector('h3');
+  container.insertBefore(banner, h3);
+}
+
+/* 패스워드 변경 모달 */
+function showPasswordChange() {
+  document.getElementById('passwordModal').style.display = 'block';
+  document.getElementById('currentPassword').value = '';
+  document.getElementById('newPassword').value = '';
+  document.getElementById('confirmPassword').value = '';
+}
+
+function hidePasswordChange() {
+  document.getElementById('passwordModal').style.display = 'none';
+}
+
+async function changePassword() {
+  const currentPw = document.getElementById('currentPassword').value.trim();
+  const newPw = document.getElementById('newPassword').value.trim();
+  const confirmPw = document.getElementById('confirmPassword').value.trim();
+  
+  if (!currentPw || !newPw || !confirmPw) {
+    alert('모든 필드를 입력하세요.');
+    return;
+  }
+  
+  if (newPw !== confirmPw) {
+    alert('새 패스워드가 일치하지 않습니다.');
+    return;
+  }
+  
+  if (newPw.length < 4) {
+    alert('패스워드는 최소 4자 이상이어야 합니다.');
+    return;
+  }
+  
+  const userId = localStorage.getItem('userId');
+  const loginId = localStorage.getItem('loginId');
+  
+  if (!userId || !supabaseClient) {
+    alert('로그인 정보가 없습니다.');
+    return;
+  }
+  
+  try {
+    // 현재 패스워드 확인
+    const { data: user, error: fetchError } = await supabaseClient
+      .from('users')
+      .select('password')
+      .eq('id', userId)
+      .single();
+    
+    if (fetchError) throw fetchError;
+    
+    if (user.password !== currentPw) {
+      alert('현재 패스워드가 올바르지 않습니다.');
+      return;
+    }
+    
+    // 패스워드 변경
+    const { error: updateError } = await supabaseClient
+      .from('users')
+      .update({ password: newPw })
+      .eq('id', userId);
+    
+    if (updateError) throw updateError;
+    
+    alert('패스워드가 성공적으로 변경되었습니다.');
+    hidePasswordChange();
+    
+  } catch (error) {
+    console.error('패스워드 변경 오류:', error);
+    alert('패스워드 변경 중 오류가 발생했습니다: ' + error.message);
+  }
+}
+
+/* 데이터 키 생성 */
+function getDataKey() {
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = now.getMonth() + 1;
+  const id = localStorage.getItem('loginId');
+  return (id || '') + '_' + y + '_' + m;
+}
+
+/* 데이터 저장 - 완전히 새로운 방식 */
+async function saveData(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
+  const userId = localStorage.getItem('userId');
+  const branchId = localStorage.getItem('loginId');
+  const branchName = localStorage.getItem('loginBranch');
+  
+  if (!userId || !branchId) {
+    alert('로그인 정보가 없습니다.');
+    return false;
+  }
+
+  if (!supabaseClient) {
+    alert('Supabase가 초기화되지 않았습니다.');
+    return false;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = now.getMonth() + 1;
+
+  const items = [];
+  const rows = document.querySelectorAll('tbody tr');
+
+  rows.forEach(row => {
+    if (row.classList.contains('total')) return;
+    const leftTd = row.querySelector('td.left');
+    if (!leftTd) return;
+    const itemName = leftTd.textContent.trim();
+    if (!itemName) return;
+
+    const item = { itemName: itemName };
+    
+    const stockInputs = row.querySelectorAll('input[data-field="stock"]');
+    if (stockInputs.length > 0) item.stock = Number(stockInputs[0].value || 0);
+    
+    const applyInputs = row.querySelectorAll('input[data-field="apply"]');
+    if (applyInputs.length > 0) item.apply = Number(applyInputs[0].value || 0);
+    
+    const packStockInputs = row.querySelectorAll('input[data-field="packStock"]');
+    if (packStockInputs.length > 0) item.packStock = Number(packStockInputs[0].value || 0);
+    
+    const packApplyInputs = row.querySelectorAll('input[data-field="packApply"]');
+    if (packApplyInputs.length > 0) item.packApply = Number(packApplyInputs[0].value || 0);
+
+    items.push(item);
+  });
+
+  const payload = {
+    user_id: userId,
+    branch_id: branchId,
+    branch_name: branchName || '',
+    year: year,
+    month: month,
+    items: items
+  };
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('applications')
+      .upsert(payload, { onConflict: 'branch_id,year,month' });
+
+    if (error) throw error;
+    console.log('✅ 저장 완료:', items.length + '개 항목');
+    alert('저장되었습니다. (총 ' + items.length + '개 항목)');
+  } catch (error) {
+    console.error('저장 오류:', error);
+    alert('저장 중 오류가 발생했습니다: ' + error.message);
+  }
+  return false;
+}
+
+/* 사용자 정보 불러오기 */
+async function loadUserInfo() {
+  const branchId = localStorage.getItem('loginId');
+  if (!branchId || !supabaseClient) return;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('users')
+      .select('acct, to_count')
+      .eq('username', branchId)
+      .single();
+
+    if (error) {
+      console.error('사용자 정보 불러오기 오류:', error);
+      return;
+    }
+
+    if (data) {
+      document.querySelector('.acctAll').textContent = data.acct || 0;
+      document.querySelector('.toAll').textContent = data.to_count || 0;
+    }
+  } catch (error) {
+    console.error('사용자 정보 불러오기 오류:', error);
+  }
+}
+
+/* 데이터 불러오기 */
+async function loadData() {
+  const userId = localStorage.getItem('userId');
+  const branchId = localStorage.getItem('loginId');
+  if (!userId || !branchId || !supabaseClient) return;
+
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = now.getMonth() + 1;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('applications')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('year', year)
+      .eq('month', month)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('불러오기 오류:', error);
+      return;
+    }
+    if (!data || !data.items || !Array.isArray(data.items)) return;
+
+    console.log('✅ 데이터 불러오기:', data.items.length + '개 항목');
+    
+    data.items.forEach(item => {
+      const row = findRowByItemName(item.itemName);
+      if (!row) return;
+      
+      if (item.stock != null) {
+        const inputs = row.querySelectorAll('input[data-field="stock"]');
+        if (inputs.length > 0) inputs[0].value = item.stock;
+      }
+      if (item.apply != null) {
+        const inputs = row.querySelectorAll('input[data-field="apply"]');
+        if (inputs.length > 0) inputs[0].value = item.apply;
+      }
+      if (item.packStock != null) {
+        const inputs = row.querySelectorAll('input[data-field="packStock"]');
+        if (inputs.length > 0) inputs[0].value = item.packStock;
+      }
+      if (item.packApply != null) {
+        const inputs = row.querySelectorAll('input[data-field="packApply"]');
+        if (inputs.length > 0) inputs[0].value = item.packApply;
+      }
+    });
+    recalc();
+  } catch (error) {
+    console.error('불러오기 오류:', error);
+  }
+}
+
+/* 항목명으로 행 찾기 */
+function findRowByItemName(itemName) {
+  const rows = document.querySelectorAll('tbody tr');
+  for (let row of rows) {
+    const leftTd = row.querySelector('td.left');
+    if (leftTd && leftTd.textContent.trim() === itemName) {
+      return row;
+    }
+  }
+  return null;
+}
+
+/* 계산 함수들 */
+function calcTubing1P(row){
+  if(!row) return;
+
+  const std  = Number(row.querySelector('.std')?.textContent || 0);
+  const acct = Number(document.querySelector('.acctAll')?.textContent || 0);
+
+  row.querySelector('.need').textContent =
+    Math.ceil((acct * 0.5) * std / 100);
+}
+
+function calcTubing2P(row){
+  if(!row) return;
+
+  const std  = Number(row.querySelector('.std')?.textContent || 0);
+  const acct = Number(document.querySelector('.acctAll')?.textContent || 0);
+
+  row.querySelector('.need').textContent =
+    Math.ceil((acct * 0.5) * std / 50);
+}
+
+function calcTeflon(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  row.querySelector('.need').textContent =
+    Math.ceil(to * 3);
+}
+
+function calcrabbit(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  row.querySelector('.need').textContent =
+    Math.ceil(to * 2);
+}
+
+function calcScrew(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 2000;
+  } else if (to >= 11 && to <= 20) {
+    need = 4000;
+  } else if (to >= 21 && to <= 30) {
+    need = 6000;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcSteelScrew(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+   if (to >= 1 && to <= 10) {
+    need = 2000;
+  } else if (to >= 11 && to <= 20) {
+    need = 4000;
+  } else if (to >= 21 && to <= 30) {
+    need = 6000;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcfixed(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+   if (to >= 1 && to <= 10) {
+    need = 2000;
+  } else if (to >= 11 && to <= 20) {
+    need = 4000;
+  } else if (to >= 21 && to <= 30) {
+    need = 6000;
+  }
+
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcfixed1(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+   if (to >= 1 && to <= 10) {
+    need = 2000;
+  } else if (to >= 11 && to <= 20) {
+    need = 4000;
+  } else if (to >= 21 && to <= 30) {
+    need = 6000;
+  }
+
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calccabletie1(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 2000;
+  } else if (to >= 11 && to <= 20) {
+    need = 4000;
+  } else if (to >= 21 && to <= 30) {
+    need = 6000;
+  }
+
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calccabletie2(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 1000;
+  } else if (to >= 11 && to <= 20) {
+    need = 2000;
+  } else if (to >= 21 && to <= 30) {
+    need = 3000;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcmbase(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 1000;
+  } else if (to >= 11 && to <= 20) {
+    need = 2000;
+  } else if (to >= 21 && to <= 30) {
+    need = 3000;
+  }
+
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcnipple(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 20;
+  } else if (to >= 11 && to <= 20) {
+    need = 20;
+  } else if (to >= 21 && to <= 30) {
+    need = 40;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcnipple1(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 20;
+  } else if (to >= 11 && to <= 20) {
+    need = 20;
+  } else if (to >= 21 && to <= 30) {
+    need = 40;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calctape(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  row.querySelector('.need').textContent =
+    Math.ceil(to * 3);
+}
+
+function calccuban(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 1000;
+  } else if (to >= 11 && to <= 20) {
+    need = 2000;
+  } else if (to >= 21 && to <= 30) {
+    need = 3000;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcanchor(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+  let need = 0;
+
+  if (to >= 1 && to <= 10) {
+    need = 1000;
+  } else if (to >= 11 && to <= 20) {
+    need = 2000;
+  } else if (to >= 21 && to <= 30) {
+    need = 3000;
+  }
+
+  row.querySelector('.need').textContent = need;
+}
+
+function calcDryTissue(row){
+  if (!row) return;
+
+  const EA_PER_PACK = 20;
+
+  const stockPack = Number(
+    row.querySelector('.pack-stock')?.value || 0
+  );
+  row.querySelector('.stock-ea').textContent =
+    (stockPack * EA_PER_PACK).toLocaleString();
+
+  const applyPack = Number(
+    row.querySelector('.pack-apply')?.value || 0
+  );
+  row.querySelector('.apply-ea').textContent =
+    (applyPack * EA_PER_PACK).toLocaleString();
+}
+
+function calcDryTissueStock(row){
+  if (!row) return;
+
+  const need = Number(
+    row.querySelector('.need')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const stockEa = Number(
+    row.querySelector('.stock-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const applyEa = Number(
+    row.querySelector('.apply-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const shortage = need - stockEa;
+  row.querySelector('.shortage').textContent =
+    shortage.toLocaleString();
+  row.querySelector('.shortage').style.color =
+    shortage > 0 ? 'red' : 'black';
+
+  const nextStock = stockEa + applyEa;
+  row.querySelector('.next-stock').textContent =
+    nextStock.toLocaleString();
+}
+
+function calcDryTissueNeed(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const isEvenMonth = month % 2 === 0;
+
+  let need = 0;
+
+  if (to >= 1 && to <= 5) {
+    need = isEvenMonth ? 2000 : 0;
+  } else if (to >= 6 && to <= 20) {
+    need = 2000;
+  } else if (to >= 21 && to <= 30) {
+    need = 4000;
+  }
+
+  row.querySelector('.need').textContent = need.toLocaleString();
+}
+
+function calcwetTissue(row){
+  if (!row) return;
+
+  const EA_PER_PACK = 50;
+
+  const stockPack = Number(
+    row.querySelector('.pack-stock')?.value || 0
+  );
+  row.querySelector('.stock-ea').textContent =
+    (stockPack * EA_PER_PACK).toLocaleString();
+
+  const applyPack = Number(
+    row.querySelector('.pack-apply')?.value || 0
+  );
+  row.querySelector('.apply-ea').textContent =
+    (applyPack * EA_PER_PACK).toLocaleString();
+}
+
+function calcwetTissueStock(row){
+  if (!row) return;
+
+  const need = Number(
+    row.querySelector('.need')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const stockEa = Number(
+    row.querySelector('.stock-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const applyEa = Number(
+    row.querySelector('.apply-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const shortage = need - stockEa;
+  row.querySelector('.shortage').textContent =
+    shortage.toLocaleString();
+  row.querySelector('.shortage').style.color =
+    shortage > 0 ? 'red' : 'black';
+
+  const nextStock = stockEa + applyEa;
+  row.querySelector('.next-stock').textContent =
+    nextStock.toLocaleString();
+}
+
+
+function calcwetTissueNeed(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const isEvenMonth = month % 2 === 0;
+
+  let need = 0;
+
+  if (to >= 1 && to <= 5) {
+    need = isEvenMonth ? 2500 : 0;
+  } else if (to >= 6 && to <= 20) {
+    need = 2500;
+  } else if (to >= 21 && to <= 30) {
+    need = 5000;
+  }
+
+  row.querySelector('.need').textContent = need.toLocaleString();
+}
+
+function calcglove(row){
+  if (!row) return;
+
+  const EA_PER_PACK = 200;
+
+  const stockPack = Number(
+    row.querySelector('.pack-stock')?.value || 0
+  );
+  row.querySelector('.stock-ea').textContent =
+    (stockPack * EA_PER_PACK).toLocaleString();
+
+  const applyPack = Number(
+    row.querySelector('.pack-apply')?.value || 0
+  );
+  row.querySelector('.apply-ea').textContent =
+    (applyPack * EA_PER_PACK).toLocaleString();
+}
+
+function calcgloveStock(row){
+  if (!row) return;
+
+  const need = Number(
+    row.querySelector('.need')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const stockEa = Number(
+    row.querySelector('.stock-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const applyEa = Number(
+    row.querySelector('.apply-ea')?.textContent.replace(/,/g,'') || 0
+  );
+
+  const shortage = need - stockEa;
+  row.querySelector('.shortage').textContent =
+    shortage.toLocaleString();
+  row.querySelector('.shortage').style.color =
+    shortage > 0 ? 'red' : 'black';
+
+  const nextStock = stockEa + applyEa;
+  row.querySelector('.next-stock').textContent =
+    nextStock.toLocaleString();
+}
+
+
+function calcgloveNeed(row){
+  if (!row) return;
+
+  const to = Number(document.querySelector('.toAll')?.textContent || 0);
+
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const isEvenMonth = month % 2 === 0;
+
+  let need = 0;
+
+  if (to >= 1 && to <= 5) {
+    need = isEvenMonth ? 6000 : 0;
+  } else if (to >= 6 && to <= 10) {
+    need = 6000;
+  } else if (to >= 11 && to <= 30) {
+    need = 6000;
+  }
+
+  row.querySelector('.need').textContent = need.toLocaleString();
+}
+
+function calcShortage(row) {
+  if (!row) return;
+
+  const needTd = row.querySelector('.need');
+  const shortageTd = row.querySelector('.shortage');
+
+  if (!needTd || !shortageTd) return;
+
+  const need = Number(needTd.textContent.replace(/,/g, '') || 0);
+
+  // data-field="stock"으로 재고 input 찾기
+  const stockInputs = row.querySelectorAll('input[data-field="stock"]');
+  const stock = stockInputs.length > 0 ? Number(stockInputs[0].value || 0) : 0;
+
+  const shortage = need - stock;
+  shortageTd.textContent = shortage.toLocaleString();
+
+  shortageTd.style.color = shortage > 0 ? 'red' : 'black';
+}
+
+function calcNextStock(row) {
+  if (!row) return;
+
+  const nextStockTd = row.querySelector('.next-stock');
+  if (!nextStockTd) return;
+
+  // data-field="stock"으로 재고 찾기
+  const stockInputs = row.querySelectorAll('input[data-field="stock"]');
+  const stock = stockInputs.length > 0 ? Number(stockInputs[0].value || 0) : 0;
+
+  // data-field="apply"로 신청수량 찾기
+  const applyInputs = row.querySelectorAll('input[data-field="apply"]');
+  const applyEa = applyInputs.length > 0 ? Number(applyInputs[0].value || 0) : 0;
+
+  const nextStock = stock + applyEa;
+
+  nextStockTd.textContent = nextStock.toLocaleString();
+}
+
+function calcTotalSummary() {
+
+  let totalNeed = 0;
+  let totalStock = 0;
+  let totalShortage = 0;
+  let totalApply = 0;
+  let totalNextStock = 0;
+
+  document.querySelectorAll('tbody tr').forEach(row => {
+    if (row.classList.contains('total')) return;
+
+    const need = Number(
+      row.querySelector('.need')?.textContent.replace(/,/g,'') || 0
+    );
+    totalNeed += need;
+
+    let stock = 0;
+
+    const stockEaTd = row.querySelector('.stock-ea');
+    if (stockEaTd) {
+      stock += Number(stockEaTd.textContent.replace(/,/g,'') || 0);
+    }
+
+    const stockInputs = row.querySelectorAll('input[data-field="stock"]');
+    if (stockInputs.length > 0) {
+      stock += Number(stockInputs[0].value || 0);
+    }
+
+    totalStock += stock;
+
+    const shortage = Number(
+      row.querySelector('.shortage')?.textContent.replace(/,/g,'') || 0
+    );
+    totalShortage += shortage;
+
+    let apply = 0;
+
+    const applyEaTd = row.querySelector('.apply-ea');
+    if (applyEaTd) {
+      apply += Number(applyEaTd.textContent.replace(/,/g,'') || 0);
+    }
+
+    const applyInputs = row.querySelectorAll('input[data-field="apply"]');
+    if (applyInputs.length > 0) {
+      apply += Number(applyInputs[0].value || 0);
+    }
+
+    totalApply += apply;
+
+    const nextStock = Number(
+      row.querySelector('.next-stock')?.textContent.replace(/,/g,'') || 0
+    );
+    totalNextStock += nextStock;
+  });
+
+  document.getElementById('totalNeed').textContent = totalNeed.toLocaleString();
+  document.getElementById('totalStock').textContent = totalStock.toLocaleString();
+  document.getElementById('totalShortage').textContent = totalShortage.toLocaleString();
+  document.getElementById('totalApply').textContent = totalApply.toLocaleString();
+  document.getElementById('totalNextStock').textContent = totalNextStock.toLocaleString();
+}
+
+/* 신형고강도 월 체크 */
+function checkHighStrengthMonth() {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  const isEvenMonth = month % 2 === 0; // 짝수 월인지 체크
+  
+  // 신형고강도 2호, 3호 행 찾기
+  const row2 = document.querySelector('.high-strength-2');
+  const row3 = document.querySelector('.high-strength-3');
+  
+  if (!isEvenMonth) {
+    // 홀수 월: 비활성화
+    if (row2) {
+      const inputs = row2.querySelectorAll('input');
+      inputs.forEach(input => {
+        input.disabled = true;
+        input.value = 0;
+        input.style.backgroundColor = '#e0e0e0';
+      });
+      const leftTd = row2.querySelector('td.left');
+      if (leftTd) {
+        leftTd.innerHTML = '신형고강도(흰색) 2호 <span style="color:red; font-size:11px;">(해당 월 주문 X)</span>';
+      }
+    }
+    
+    if (row3) {
+      const inputs = row3.querySelectorAll('input');
+      inputs.forEach(input => {
+        input.disabled = true;
+        input.value = 0;
+        input.style.backgroundColor = '#e0e0e0';
+      });
+      const leftTd = row3.querySelector('td.left');
+      if (leftTd) {
+        leftTd.innerHTML = '신형고강도(흰색) 3호 <span style="color:red; font-size:11px;">(해당 월 주문 X)</span>';
+      }
+    }
+  } else {
+    // 짝수 월: 마감 상태가 아닐 때만 활성화
+    const isClosed = document.getElementById('closedBanner') !== null;
+    if (!isClosed) {
+      if (row2) {
+        const inputs = row2.querySelectorAll('input');
+        inputs.forEach(input => {
+          input.disabled = false;
+          input.style.backgroundColor = '#ffff00';
+        });
+      }
+      
+      if (row3) {
+        const inputs = row3.querySelectorAll('input');
+        inputs.forEach(input => {
+          input.disabled = false;
+          input.style.backgroundColor = '#ffff00';
+        });
+      }
+    }
+  }
+}
+
+function recalc(){
+  const rows = document.querySelectorAll('tbody tr');
+
+  calcTubing1P(document.querySelector('.tubing1p'));
+  calcTubing2P(document.querySelector('.tubing2p'));
+  calcTeflon(document.querySelector('.teflon'));
+  calcrabbit(document.querySelector('.rabbit'));
+  calcScrew(document.querySelector('.screw'));
+  calcSteelScrew(document.querySelector('.steelscrew'));
+  calcfixed(document.querySelector('.fixed'));
+  calcfixed1(document.querySelector('.fixed1'));
+  calccabletie1(document.querySelector('.cabletie1'));
+  calccabletie2(document.querySelector('.cabletie2'));
+  calcmbase(document.querySelector('.mbase'));
+  calcnipple(document.querySelector('.nipple'));
+  calcnipple1(document.querySelector('.nipple1'));
+  calctape(document.querySelector('.tape'));
+  calccuban(document.querySelector('.cuban'));
+  calcanchor(document.querySelector('.anchor'));
+  
+ const dryRow = document.querySelector('.drytissue');
+calcDryTissueNeed(dryRow);
+calcDryTissue(dryRow);
+calcDryTissueStock(dryRow);
+
+const wetRow = document.querySelector('.wettissue');
+calcwetTissueNeed(wetRow);
+calcwetTissue(wetRow);
+calcwetTissueStock(wetRow);
+
+const gloveRow = document.querySelector('.glove');
+calcgloveNeed(gloveRow);
+calcglove(gloveRow);
+calcgloveStock(gloveRow);
+
+rows.forEach(row => {
+  if (row.classList.contains('total')) return;
+  if (!row.classList.contains('drytissue') &&
+      !row.classList.contains('wettissue') &&
+      !row.classList.contains('glove')) {
+    calcShortage(row);
+    calcNextStock(row);
+  }
+});
+  calcTotalSummary();
+}
+
+</script>
+
+</body>
+</html>
