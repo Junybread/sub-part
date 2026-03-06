@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>발주서</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f6f8; }
+  .container { max-width: 1200px; margin: 20px auto; background: #fff; padding: 20px; }
+  h2 { margin-bottom: 5px; }
+  .top-buttons { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .top-buttons button {
+    padding: 8px 14px; font-size: 13px; background: #1f3a5a;
+    color: #fff; border: none; border-radius: 4px; cursor: pointer;
+  }
+  .top-buttons button:hover { background: #16304a; }
+  .btn-back { background: #6c757d !important; }
+  .btn-back:hover { background: #5a6268 !important; }
+  .btn-download { background: #28a745 !important; }
+  .btn-download:hover { background: #218838 !important; }
+
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 0; flex-wrap: wrap; }
+  .tab-btn {
+    padding: 8px 16px; font-size: 13px; cursor: pointer;
+    border: 1px solid #ccc; border-bottom: none; border-radius: 4px 4px 0 0;
+    background: #e9ecef; color: #333;
+  }
+  .tab-btn.active { background: #1f3a5a; color: #fff; border-color: #1f3a5a; }
+  .tab-content { display: none; border: 1px solid #ccc; padding: 15px; border-radius: 0 4px 4px 4px; }
+  .tab-content.active { display: block; }
+
+  /* 틀 고정을 위한 테이블 래퍼 */
+  .table-wrap { overflow-x: auto; overflow-y: auto; max-height: 70vh; position: relative; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+  th, td { border: 1px solid #000; padding: 5px 7px; text-align: center; white-space: nowrap; }
+  th { background: #1f3a5a; color: #fff; font-weight: normal; }
+  th.sub { background: #cfdcf5; color: #000; }
+
+  /* ── 틀 고정 ── */
+  thead th { position: sticky; top: 0; z-index: 3; }
+
+  /* 법인명 열 (1번째) */
+  th.sticky-col, td.sticky-col {
+    position: sticky; left: 0; z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.12);
+  }
+  thead th.sticky-col { z-index: 5; background: #1f3a5a; }
+  thead th.sub.sticky-col { background: #cfdcf5; z-index: 5; }
+  tbody td.sticky-col { background: #fff; }
+  tfoot td.sticky-col, tr.total-row td.sticky-col { background: #e6e6e6; }
+
+  /* 구분 열 (2번째, 탭3 후드용) */
+  th.sticky-col2, td.sticky-col2 {
+    position: sticky; left: 162px; z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  }
+  thead th.sticky-col2 { z-index: 5; background: #cfdcf5; }
+  tbody td.sticky-col2 { background: #fff; }
+  tfoot td.sticky-col2, tr.total-row td.sticky-col2 { background: #e6e6e6; }
+  td.left { text-align: left; }
+  .total-row { background: #e6e6e6; font-weight: bold; }
+  .amount { color: #1a5276; }
+  .loading { text-align: center; padding: 30px; color: #666; font-size: 14px; }
+  .year-month { font-size: 13px; color: #666; margin-bottom: 10px; }
+  /* 수정 가능 셀 */
+  td.editable { cursor: pointer; position: relative; }
+  td.editable:hover { background: #fffde7 !important; outline: 2px dashed #f39c12; }
+  td.modified { background: #fff3cd !important; color: #856404 !important; font-weight: bold; }
+  td.modified::after { content: '✎'; font-size: 10px; margin-left: 3px; color: #e67e22; }
+  input.edit-input {
+    width: 60px; text-align: center; border: 2px solid #f39c12;
+    border-radius: 3px; padding: 2px; font-size: 12px; background: #fffff0;
+  }
+  .save-notice { font-size: 11px; color: #28a745; margin-left: 8px; display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>📋 발주서</h2>
+  <div class="year-month" id="yearMonthLabel"></div>
+
+  <div class="top-buttons">
+    <button class="btn-back" onclick="location.href='admin.html'">← 관리자 페이지</button>
+    <button class="btn-download" onclick="downloadCurrentTab()">📥 현재 탭 엑셀 다운로드</button>
+    <button class="btn-download" onclick="downloadAllTabs()" style="background:#007bff !important;">📥 전체 다운로드</button>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab(0)">아이존</button>
+    <button class="tab-btn" onclick="showTab(1)">에프엔시스</button>
+    <button class="tab-btn" onclick="showTab(2)">대성공구(잡자재)</button>
+    <button class="tab-btn" onclick="showTab(3)">대성공구(후드)</button>
+    <button class="tab-btn" onclick="showTab(4)">서비스봉투/폼테이프</button>
+    <button class="tab-btn" onclick="showTab(5)">신원튜브</button>
+    <button class="tab-btn" onclick="showTab(6)" style="background:#e8f5e9; color:#1b5e20; border-color:#4caf50; font-weight:bold;">📊 금액 합산</button>
+  </div>
+
+  <!-- 탭 0: 아이존 -->
+  <div class="tab-content active" id="tab0">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 1: 에프엔시스 -->
+  <div class="tab-content" id="tab1">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 2: 대성공구 잡자재 -->
+  <div class="tab-content" id="tab2">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 3: 대성공구 후드 -->
+  <div class="tab-content" id="tab3">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 4: 서비스봉투/폼테이프 -->
+  <div class="tab-content" id="tab4">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 5: 신원튜브 -->
+  <div class="tab-content" id="tab5">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+  <!-- 탭 6: 금액 합산 -->
+  <div class="tab-content" id="tab6">
+    <div class="loading">데이터 불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://yhuvkxuzolhpnzzbpigr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Ka0LELW2NrPf3q3dyO1Usg_EHYTS31K';
+var supabaseClient = null;
+
+// 단가 정보
+const PRICES = {
+  // 아이존
+  '건식티슈': 83000,
+  '습식티슈': 46500,
+  '위생장갑': 53100,
+  // 에프엔시스
+  '신형고강도(흰색) 2호': 485,
+  '신형고강도(흰색) 3호': 758,
+  // 대성공구 잡자재
+  '테프론': 300,
+  '토끼코크': 1500,
+  '피스': 4300,
+  '철판피스': 3800,
+  '새들(4N)': 7800,
+  '새들(6N)': 11500,
+  '케이블타이(대)': 15000,
+  '케이블타이(소)': 3400,
+  '마운팅베이스': 19500,
+  '단 니플': 900,
+  '연결니플': 900,
+  '전기테이프': 500,
+  '배수용큐방': 40000,
+  '천공앙카': 1100,
+  // 대성공구 후드
+  'PB-1 세정제 (600ml)': 1500,
+  '은박테이프': 5200,
+  '알루미늄 후렉시블(100mm×10M)': 15500,
+  '환기자재 레듀샤(125mm-100mm)': 2500,
+  // 신원튜브
+  '튜빙선(1P)': 24000,
+  '튜빙선(2P)': 21500,
+  '튜빙선(1P, 3/8)': 19750,
+  '튜빙선_ACS (LLD T/B 1/2)': 25000,
+  '배수호스': 900,
+};
+
+// DB item명 → 발주서 표시명 매핑
+const ITEM_ALIAS = {
+  '케이블타이(소)': '케이블타이(중)',
+  '단 니플': '단 니플',
+  '연결니플': '연결 니플',
+};
+
+let allData = null; // 전체 로드된 데이터
+let currentTab = 0;
+const modifiedCells = {}; // 수정된 셀 추적: key = 'branchId|itemName|field'
+
+const now = new Date();
+const YEAR = now.getFullYear().toString().slice(-2);
+const MONTH = now.getMonth() + 1;
+
+document.addEventListener('DOMContentLoaded', async function() {
+  const role = localStorage.getItem('loginRole');
+  if (role !== 'admin') {
+    alert('관리자만 접근 가능합니다.');
+    location.href = 'login.html';
+    return;
+  }
+
+  if (typeof window.supabase !== 'undefined') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
+  document.getElementById('yearMonthLabel').textContent = '20' + YEAR + '년 ' + MONTH + '월 기준';
+
+  await loadAllData();
+  renderAllTabs();
+});
+
+async function loadAllData() {
+  try {
+    const results = await Promise.all([
+      supabaseClient.from('applications').select('*').eq('year', YEAR).eq('month', MONTH),
+      supabaseClient.from('hood_applications').select('*').eq('year', YEAR).eq('month', MONTH),
+      supabaseClient.from('users').select('username, branch_name').neq('role', 'admin').order('branch_name'),
+    ]);
+    allData = {
+      apps: results[0].data || [],
+      hoods: results[1].data || [],
+      users: results[2].data || [],
+    };
+  } catch(e) {
+    console.error(e);
+    alert('데이터 불러오기 오류: ' + e.message);
+  }
+}
+
+function getItemVal(app, itemName, field) {
+  if (!app || !app.items) return 0;
+  const item = app.items.find(i => (i.itemName || '').trim() === itemName);
+  if (!item) return 0;
+  return Number(item[field] || 0);
+}
+
+function fmt(n) { return n ? n.toLocaleString() : '0'; }
+
+// 테이블을 스크롤 래퍼로 감싸고 법인명/품명 틀 고정
+function wrapAndFreeze(html) {
+  // table-wrap div로 감싸기
+  html = html.replace(/<table/g, '<div class="table-wrap"><table');
+  html = html.replace(/<\/table>/g, '</table></div>');
+
+  // ── 1열: 법인명 고정 ──
+  html = html.replace(/<th rowspan="(\d+)" class="left"([^>]*)>/g,
+    '<th rowspan="$1" class="left sticky-col"$2>');
+  html = html.replace(/<th class="left"([^>]*)>/g,
+    '<th class="left sticky-col"$1>');
+  html = html.replace(/<td class="left"([^>]*)>/g,
+    '<td class="left sticky-col"$1>');
+  // colspan 합계 행은 제외
+  html = html.replace(/class="left sticky-col"([^>]*) colspan/g,
+    'class="left"$1 colspan');
+
+  // ── 2열: 구분(품명) 고정 - 탭3 후드 전용 ──
+  // rowspan="2" class="sub">구분 → sticky-col2 추가
+  html = html.replace(/<th rowspan="2" class="sub">구분<\/th>/g,
+    '<th rowspan="2" class="sub sticky-col2">구분</th>');
+  // tbody의 구분 td (pb1/tape 등 라벨) - left 없는 두번째 고정 열
+  html = html.replace(/<td class="sub sticky-col2-target">/g,
+    '<td class="sub sticky-col2">');
+
+  return html;
+}
+
+// 렌더 후 2번째 헤더 행 top 위치 동적 계산
+function fixStickyHeader(tabId) {
+  const container = document.getElementById(tabId);
+  if (!container) return;
+  container.querySelectorAll('table').forEach(table => {
+    const rows = table.querySelectorAll('thead tr');
+    if (rows.length >= 2) {
+      const firstRowH = rows[0].getBoundingClientRect().height || 36;
+      rows[1].querySelectorAll('th').forEach(th => {
+        th.style.top = firstRowH + 'px';
+      });
+    }
+  });
+}
+
+// ───────────────────────────────────────────────
+// 수정 공통 함수
+// ───────────────────────────────────────────────
+
+// 수량 셀 클릭 → input으로 전환
+function makeEditable(td, branchId, itemName, field, origVal, onSave) {
+  if (td.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.value = origVal;
+  input.className = 'edit-input';
+  input.style.width = (td.offsetWidth - 10) + 'px';
+
+  td.innerHTML = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  async function commit() {
+    const newVal = parseInt(input.value, 10) || 0;
+    td.innerHTML = fmt(newVal);
+    if (newVal !== origVal) {
+      td.classList.add('modified');
+      modifiedCells[branchId + '|' + itemName + '|' + field] = newVal;
+      await saveToDb(branchId, itemName, field, newVal);
+      if (onSave) onSave(td, branchId, newVal);
+    }
+  }
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { td.innerHTML = fmt(origVal); }
+  });
+}
+
+// DB 저장 - applications 테이블 items JSONB 업데이트
+async function saveToDb(branchId, itemName, field, newVal) {
+  try {
+    const { data: appData, error: fetchErr } = await supabaseClient
+      .from('applications')
+      .select('id, items')
+      .eq('branch_id', branchId)
+      .eq('year', YEAR)
+      .eq('month', MONTH)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    const items = appData.items || [];
+    const idx = items.findIndex(i => (i.itemName || '').trim() === itemName);
+    if (idx !== -1) {
+      items[idx][field] = newVal;
+      items[idx]['adminModified'] = true; // 발주서에서 수정됨 표시
+    } else {
+      const newItem = { itemName: itemName, adminModified: true };
+      newItem[field] = newVal;
+      items.push(newItem);
+    }
+
+    const { error: updateErr } = await supabaseClient
+      .from('applications')
+      .update({ items: items })
+      .eq('id', appData.id);
+
+    if (updateErr) throw updateErr;
+
+    // allData도 동기화
+    const appInMem = allData.apps.find(a => a.branch_id === branchId);
+    if (appInMem) {
+      const memIdx = appInMem.items.findIndex(i => (i.itemName || '').trim() === itemName);
+      if (memIdx !== -1) {
+        appInMem.items[memIdx][field] = newVal;
+        appInMem.items[memIdx]['adminModified'] = true;
+      }
+    }
+
+    // 저장 후 DB 재조회로 adminModified 실제 저장 여부 검증
+    const { data: verifyData } = await supabaseClient
+      .from('applications')
+      .select('items')
+      .eq('branch_id', branchId)
+      .eq('year', YEAR)
+      .eq('month', MONTH)
+      .single();
+    if (verifyData) {
+      const savedItem = verifyData.items.find(i => (i.itemName || '').trim() === itemName);
+      console.log('✅ 저장 검증:', branchId, itemName, '→', savedItem);
+      if (!savedItem || !savedItem.adminModified) {
+        console.warn('⚠ adminModified 저장 실패! 재시도...');
+        // 재시도: 방금 받아온 items로 다시 저장
+        const retryItems = verifyData.items;
+        const ri = retryItems.findIndex(i => (i.itemName || '').trim() === itemName);
+        if (ri !== -1) {
+          retryItems[ri][field] = newVal;
+          retryItems[ri]['adminModified'] = true;
+        }
+        await supabaseClient.from('applications').update({ items: retryItems }).eq('id', appData.id);
+        console.log('✅ 재시도 저장 완료');
+      }
+    }
+  } catch(e) {
+    alert('저장 오류: ' + e.message);
+    console.error(e);
+  }
+}
+
+// DB 저장 - hood_applications 테이블 컬럼 직접 업데이트
+async function saveHoodToDb(branchId, field, newVal) {
+  try {
+    const { error } = await supabaseClient
+      .from('hood_applications')
+      .update({ [field]: newVal })
+      .eq('branch_id', branchId)
+      .eq('year', YEAR)
+      .eq('month', MONTH);
+
+    if (error) throw error;
+
+    const hoodInMem = allData.hoods.find(h => h.branch_id === branchId);
+    if (hoodInMem) hoodInMem[field] = newVal;
+    console.log('✅ 후드 저장:', branchId, field, newVal);
+  } catch(e) {
+    alert('저장 오류: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ───────────────────────────────────────────────
+// 탭 렌더링
+// ───────────────────────────────────────────────
+function renderAllTabs() {
+  renderTab0_Aizone();
+  renderTab1_FNSys();
+  renderTab2_DaesungMisc();
+  renderTab3_DaesungHood();
+  renderTab4_ServiceBag();
+  renderTab5_Shinwon();
+  renderTab6_Summary();
+  // 헤더 sticky top 위치 보정
+  setTimeout(() => {
+    for (let i = 0; i <= 6; i++) fixStickyHeader('tab' + i);
+  }, 50);
+}
+
+// ── 탭0: 아이존 (건식티슈, 습식티슈, 위생장갑) ──
+function renderTab0_Aizone() {
+  const items = [
+    { name: '건식티슈',  packsPerBox: 100, price: 83000 },
+    { name: '습식티슈',  packsPerBox: 50,  price: 46500 },
+    { name: '위생장갑',  packsPerBox: 30,  price: 53100 },
+  ];
+  const { users, apps } = allData;
+
+  let totalPacks = items.map(() => 0);
+  let totalBoxes = items.map(() => 0);
+
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량(PACK) 셀을 클릭하면 직접 수정할 수 있습니다. 수정 시 DB에 자동 저장됩니다.</p>
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2" class="left" style="min-width:160px;">법인명</th>
+        <th colspan="3">건식티슈<br><span style="font-size:11px;">(1BOX=${fmt(items[0].packsPerBox)}PACK / ${fmt(items[0].price)}원)</span></th>
+        <th colspan="3">습식티슈<br><span style="font-size:11px;">(1BOX=${fmt(items[1].packsPerBox)}PACK / ${fmt(items[1].price)}원)</span></th>
+        <th colspan="3">위생장갑<br><span style="font-size:11px;">(1BOX=${fmt(items[2].packsPerBox)}PACK / ${fmt(items[2].price)}원)</span></th>
+        <th rowspan="2">합계금액</th>
+      </tr>
+      <tr>
+        <th class="sub">수량(PACK)✎</th><th class="sub">수량(BOX)</th><th class="sub">금액</th>
+        <th class="sub">수량(PACK)✎</th><th class="sub">수량(BOX)</th><th class="sub">금액</th>
+        <th class="sub">수량(PACK)✎</th><th class="sub">수량(BOX)</th><th class="sub">금액</th>
+      </tr>
+    </thead><tbody id="tbody_tab0">`;
+
+  let rows_data = [];
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const packs = items.map(item => getItemVal(app, item.name, 'packApply'));
+    packs.forEach((p, idx) => { totalPacks[idx] += p; });
+    const boxes = packs.map((p, idx) => p > 0 ? Math.ceil(p / items[idx].packsPerBox * 100) / 100 : 0);
+    boxes.forEach((b, idx) => { totalBoxes[idx] += b; });
+    const amounts = boxes.map((b, idx) => Math.round(b * items[idx].price));
+    const rowTotal = amounts.reduce((a,b) => a+b, 0);
+    if (packs.every(q => q === 0)) return;
+    rows_data.push({ u, packs, boxes, amounts, rowTotal });
+
+    html += `<tr id="row_aizone_${u.username}">
+      <td class="left">${u.branch_name}</td>
+      ${packs.map((p, idx) => {
+        const isModified = modifiedCells[u.username+'|'+items[idx].name+'|packApply'] !== undefined;
+        return `<td class="editable${isModified?' modified':''}" id="pack_${u.username}_${idx}" data-branch="${u.username}" data-item="${items[idx].name}" data-orig="${p}">${fmt(p)}</td>
+        <td id="box_${u.username}_${idx}">${boxes[idx].toFixed(2)}</td>
+        <td class="amount" id="amt_aizone_${u.username}_${idx}">${fmt(amounts[idx])}</td>`;
+      }).join('')}
+      <td class="amount" id="total_aizone_${u.username}"><b>${fmt(rowTotal)}</b></td>
+    </tr>`;
+  });
+
+  const totalBoxAmounts = totalBoxes.map((b, idx) => Math.round(b * items[idx].price));
+  const grandTotalAmt = totalBoxAmounts.reduce((a,b) => a+b, 0);
+  html += `<tr class="total-row" id="total_row_aizone">
+    <td class="left">합계</td>
+    ${totalPacks.map((p, idx) => `<td id="sum_pack_aizone_${idx}">${fmt(p)}</td><td id="sum_box_aizone_${idx}">${totalBoxes[idx].toFixed(2)}</td><td class="amount" id="sum_amt_aizone_${idx}">${fmt(totalBoxAmounts[idx])}</td>`).join('')}
+    <td class="amount" id="sum_total_aizone"><b>${fmt(grandTotalAmt)}</b></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tab0').innerHTML = wrapAndFreeze(html);
+
+  // 클릭 이벤트 등록
+  document.querySelectorAll('#tbody_tab0 td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const itemName = td.dataset.item;
+      const origVal = parseInt(td.dataset.orig, 10) || 0;
+      const itemIdx = items.findIndex(i => i.name === itemName);
+      makeEditable(td, branchId, itemName, 'packApply', origVal, function(cell, bid, newPack) {
+        td.dataset.orig = newPack;
+        // BOX, 금액, 합계 재계산
+        const newBox = newPack > 0 ? Math.ceil(newPack / items[itemIdx].packsPerBox * 100) / 100 : 0;
+        const newAmt = Math.round(newBox * items[itemIdx].price);
+        document.getElementById('box_' + bid + '_' + itemIdx).textContent = newBox.toFixed(2);
+        document.getElementById('amt_aizone_' + bid + '_' + itemIdx).textContent = fmt(newAmt);
+        // 행 합계
+        let rowTotal = 0;
+        items.forEach((it, i) => {
+          const packTd = document.getElementById('pack_' + bid + '_' + i);
+          const p = parseInt(packTd.dataset.orig, 10) || 0;
+          const b = p > 0 ? Math.ceil(p / it.packsPerBox * 100) / 100 : 0;
+          rowTotal += Math.round(b * it.price);
+        });
+        document.getElementById('total_aizone_' + bid).innerHTML = '<b>' + fmt(rowTotal) + '</b>';
+        // 컬럼 합계 갱신
+        updateAizoneColTotals(items);
+      });
+    });
+  });
+}
+
+function updateAizoneColTotals(items) {
+  items.forEach((item, idx) => {
+    let sumPack = 0, sumBox = 0, sumAmt = 0;
+    document.querySelectorAll('#tbody_tab0 td.editable[data-item="' + item.name + '"]').forEach(td => {
+      const p = parseInt(td.dataset.orig, 10) || 0;
+      const b = p > 0 ? Math.ceil(p / item.packsPerBox * 100) / 100 : 0;
+      sumPack += p;
+      sumBox += b;
+      sumAmt += Math.round(b * item.price);
+    });
+    document.getElementById('sum_pack_aizone_' + idx).textContent = fmt(sumPack);
+    document.getElementById('sum_box_aizone_' + idx).textContent = sumBox.toFixed(2);
+    document.getElementById('sum_amt_aizone_' + idx).textContent = fmt(sumAmt);
+  });
+  let grandTotal = 0;
+  for (let i = 0; i < 3; i++) {
+    grandTotal += parseInt(document.getElementById('sum_amt_aizone_' + i).textContent.replace(/,/g, '')) || 0;
+  }
+  document.getElementById('sum_total_aizone').innerHTML = '<b>' + fmt(grandTotal) + '</b>';
+}
+
+// ── 탭1: 에프엔시스 (신형고강도 2호, 3호) ──
+function renderTab1_FNSys() {
+  const items = [
+    { name: '신형고강도(흰색) 2호', label: '고강도 흰색 몰딩 2호', price: 485 },
+    { name: '신형고강도(흰색) 3호', label: '고강도 흰색 몰딩 3호', price: 758 },
+  ];
+  const { users, apps } = allData;
+  let totals = [0, 0];
+
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량 셀을 클릭하면 수정할 수 있습니다.</p>
+  <table><thead>
+    <tr>
+      <th rowspan="2" class="left" style="min-width:160px;">법인명</th>
+      ${items.map(i => `<th colspan="2" class="sub">${i.label}<br><span style="font-size:11px;">(${fmt(i.price)}원)</span></th>`).join('')}
+      <th rowspan="2">합계금액</th>
+    </tr>
+    <tr>${items.map(() => '<th class="sub">수량✎</th><th class="sub">금액</th>').join('')}</tr>
+  </thead><tbody id="tbody_tab1">`;
+
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const qtys = items.map((item, idx) => { const q = getItemVal(app, item.name, 'apply'); totals[idx] += q; return q; });
+    const amounts = qtys.map((q, idx) => q * items[idx].price);
+    const rowTotal = amounts.reduce((a,b) => a+b, 0);
+    if (qtys.every(q => q === 0)) return;
+    html += `<tr>
+      <td class="left">${u.branch_name}</td>
+      ${qtys.map((q, idx) => {
+        const isModified = modifiedCells[u.username+'|'+items[idx].name+'|apply'] !== undefined;
+        return `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${items[idx].name}" data-field="apply" data-orig="${q}" data-price="${items[idx].price}">${fmt(q)}</td>
+        <td class="amount" id="amt1_${u.username}_${idx}">${fmt(amounts[idx])}</td>`;
+      }).join('')}
+      <td class="amount" id="total1_${u.username}"><b>${fmt(rowTotal)}</b></td>
+    </tr>`;
+  });
+
+  const totalAmounts = totals.map((q,idx) => q * items[idx].price);
+  html += `<tr class="total-row">
+    <td class="left">총합계</td>
+    ${totals.map((q,idx) => `<td id="sum1_qty_${idx}">${fmt(q)}</td><td class="amount" id="sum1_amt_${idx}">${fmt(totalAmounts[idx])}</td>`).join('')}
+    <td class="amount" id="sum1_total"><b>${fmt(totalAmounts.reduce((a,b)=>a+b,0))}</b></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tab1').innerHTML = wrapAndFreeze(html);
+  registerSimpleEdit('tbody_tab1', 'applications', items, 'apply',
+    (bid, idx, newQ) => {
+      document.getElementById('amt1_' + bid + '_' + idx).textContent = fmt(newQ * items[idx].price);
+      let rowTotal = 0;
+      items.forEach((it, i) => {
+        const td = document.querySelector(`#tbody_tab1 td.editable[data-branch="${bid}"][data-item="${it.name}"]`);
+        rowTotal += (parseInt(td ? td.dataset.orig : 0) || 0) * it.price;
+      });
+      document.getElementById('total1_' + bid).innerHTML = '<b>' + fmt(rowTotal) + '</b>';
+      updateSimpleTotals('tbody_tab1', items, 'sum1_qty_', 'sum1_amt_', 'sum1_total');
+    }
+  );
+}
+
+// ── 탭2: 대성공구 잡자재 ──
+function renderTab2_DaesungMisc() {
+  const items = [
+    { db: '테프론',         label: '테프론',         price: 300,   perPack: null },
+    { db: '토끼코크',       label: '토끼코크',       price: 1500,  perPack: null },
+    { db: '피스',           label: '피스',           price: 4300,  perPack: 1000 },
+    { db: '철판피스',       label: '철판피스',       price: 3800,  perPack: 1000 },
+    { db: '새들(4N)',       label: '새들(4N)',       price: 7800,  perPack: 1000 },
+    { db: '새들(6N)',       label: '새들(6N)',       price: 11500, perPack: 1000 },
+    { db: '케이블타이(대)', label: '케이블타이(대)', price: 15000, perPack: 1000 },
+    { db: '케이블타이(소)', label: '케이블타이(중)', price: 3400,  perPack: 1000 },
+    { db: '마운팅베이스',   label: '마운팅베이스',   price: 19500, perPack: 1000 },
+    { db: '단 니플',        label: '단 니플',        price: 900,   perPack: null },
+    { db: '연결니플',       label: '연결 니플',      price: 900,   perPack: null },
+    { db: '전기테이프',     label: '전기테이프',     price: 500,   perPack: null },
+    { db: '배수용큐방',     label: '배수용큐방',     price: 40000, perPack: 1000 },
+    { db: '천공앙카',       label: '천공앙카',       price: 1100,   perPack: 10 },
+  ];
+
+  function calcAmt(q, item) {
+    if (!item.perPack) return q * item.price;
+    return (q / item.perPack) * item.price;
+  }
+
+  const packItems  = items.filter(i => i.perPack);   // PACK 단위 품목
+  const unitItems  = items.filter(i => !i.perPack);  // 낱개 단위 품목
+  const { users, apps } = allData;
+
+  // totals는 items 인덱스 기준
+  let totals = items.map(() => 0);
+
+  // ── PACK 품목 테이블 ──
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량(EA) 셀을 클릭하면 수정할 수 있습니다.</p>
+  <b style="font-size:13px;">▶ PACK 단위 품목</b>
+  <table style="margin-bottom:20px;"><thead>
+    <tr>
+      <th rowspan="2" class="left" style="min-width:150px;">법인명</th>
+      ${packItems.map(i => `<th colspan="3" class="sub" style="font-size:11px;">${i.label}<br>(${fmt(i.perPack)}EA=1PACK / ${fmt(i.price)}원)</th>`).join('')}
+      <th rowspan="2">합계금액</th>
+    </tr>
+    <tr>
+      ${packItems.map(() => '<th class="sub">수량(EA)✎</th><th class="sub">수량(PACK)</th><th class="sub">금액</th>').join('')}
+    </tr>
+  </thead><tbody id="tbody_tab2_pack">`;
+
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const pQtys = packItems.map(item => { const q = getItemVal(app, item.db, 'apply'); totals[items.indexOf(item)] += q; return q; });
+    const rowTotal = pQtys.reduce((s, q, i) => s + calcAmt(q, packItems[i]), 0);
+    if (pQtys.every(q => q === 0)) return;
+    html += `<tr><td class="left">${u.branch_name}</td>`;
+    pQtys.forEach((q, pi) => {
+      const item = packItems[pi];
+      const globalIdx = items.indexOf(item);
+      const isModified = modifiedCells[u.username+'|'+item.db+'|apply'] !== undefined;
+      const pack = q > 0 ? (q / item.perPack) : 0;
+      const amt  = Math.round(calcAmt(q, item));
+      html += `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${item.db}" data-field="apply" data-orig="${q}" data-perpack="${item.perPack}" data-price="${item.price}" id="qty2_${u.username}_${globalIdx}">${fmt(q)}</td>`;
+      html += `<td id="pack2_${u.username}_${globalIdx}">${pack.toFixed(3)}</td>`;
+      html += `<td class="amount" id="amt2_${u.username}_${globalIdx}">${fmt(amt)}</td>`;
+    });
+    html += `<td class="amount" id="total2p_${u.username}"><b>${fmt(Math.round(rowTotal))}</b></td></tr>`;
+  });
+
+  // PACK 합계행
+  html += `<tr class="total-row"><td class="left">합계</td>`;
+  packItems.forEach(item => {
+    const gi = items.indexOf(item);
+    const sumQ = totals[gi];
+    const sumPack = sumQ / item.perPack;
+    const sumAmt = Math.round(calcAmt(sumQ, item));
+    html += `<td id="sum2_qty_${gi}">${fmt(sumQ)}</td><td id="sum2_pack_${gi}">${sumPack.toFixed(3)}</td><td class="amount" id="sum2_amt_${gi}">${fmt(sumAmt)}</td>`;
+  });
+  const packGrand = packItems.reduce((s, it) => s + Math.round(calcAmt(totals[items.indexOf(it)], it)), 0);
+  html += `<td class="amount" id="sum2_pack_total"><b>${fmt(packGrand)}</b></td></tr></tbody></table>`;
+
+  // ── 낱개 품목 테이블 ──
+  html += `<b style="font-size:13px;">▶ 낱개 단위 품목</b>
+  <table><thead>
+    <tr>
+      <th class="left" style="min-width:150px;">법인명</th>
+      ${unitItems.map(i => `<th class="sub" style="font-size:11px;">${i.label}<br>(${fmt(i.price)}원)✎</th>`).join('')}
+      <th>합계금액</th>
+    </tr>
+  </thead><tbody id="tbody_tab2_unit">`;
+
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const uQtys = unitItems.map(item => { const q = getItemVal(app, item.db, 'apply'); totals[items.indexOf(item)] += q; return q; });
+    const rowTotal = uQtys.reduce((s, q, i) => s + calcAmt(q, unitItems[i]), 0);
+    if (uQtys.every(q => q === 0)) return;
+    html += `<tr><td class="left">${u.branch_name}</td>`;
+    uQtys.forEach((q, ui) => {
+      const item = unitItems[ui];
+      const gi = items.indexOf(item);
+      const isModified = modifiedCells[u.username+'|'+item.db+'|apply'] !== undefined;
+      html += `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${item.db}" data-field="apply" data-orig="${q}" data-price="${item.price}" id="qty2_${u.username}_${gi}">${fmt(q)}</td>`;
+    });
+    html += `<td class="amount" id="total2u_${u.username}"><b>${fmt(Math.round(rowTotal))}</b></td></tr>`;
+  });
+
+  // 낱개 합계행
+  html += `<tr class="total-row"><td class="left">합계</td>`;
+  unitItems.forEach(item => {
+    const gi = items.indexOf(item);
+    html += `<td id="sum2_qty_${gi}">${fmt(totals[gi])}</td>`;
+  });
+  const unitGrand = unitItems.reduce((s, it) => s + calcAmt(totals[items.indexOf(it)], it), 0);
+  html += `<td class="amount" id="sum2_unit_total"><b>${fmt(Math.round(unitGrand))}</b></td></tr></tbody></table>`;
+
+  document.getElementById('tab2').innerHTML = wrapAndFreeze(html);
+
+  // ── 이벤트 등록 (PACK 품목) ──
+  document.querySelectorAll('#tbody_tab2_pack td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId  = td.dataset.branch;
+      const itemName  = td.dataset.item;
+      const origVal   = parseInt(td.dataset.orig, 10) || 0;
+      const item      = items.find(i => i.db === itemName);
+      const gi        = items.indexOf(item);
+      makeEditable(td, branchId, itemName, 'apply', origVal, function(cell, bid, newQ) {
+        td.dataset.orig = newQ;
+        const newPack = newQ > 0 ? (newQ / item.perPack) : 0;
+        const newAmt  = Math.round((newQ / item.perPack) * item.price);
+        document.getElementById('pack2_' + bid + '_' + gi).textContent = newPack.toFixed(3);
+        document.getElementById('amt2_'  + bid + '_' + gi).textContent = fmt(newAmt);
+        // 행 합계 (PACK 테이블)
+        let rowTotal = 0;
+        packItems.forEach(it => {
+          const t = document.getElementById('qty2_' + bid + '_' + items.indexOf(it));
+          rowTotal += calcAmt(parseInt(t ? t.dataset.orig : 0, 10) || 0, it);
+        });
+        document.getElementById('total2p_' + bid).innerHTML = '<b>' + fmt(Math.round(rowTotal)) + '</b>';
+        updateTab2Totals(items, packItems, unitItems, calcAmt);
+      });
+    });
+  });
+
+  // ── 이벤트 등록 (낱개 품목) ──
+  document.querySelectorAll('#tbody_tab2_unit td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const itemName = td.dataset.item;
+      const origVal  = parseInt(td.dataset.orig, 10) || 0;
+      const item     = items.find(i => i.db === itemName);
+      makeEditable(td, branchId, itemName, 'apply', origVal, function(cell, bid, newQ) {
+        td.dataset.orig = newQ;
+        let rowTotal = 0;
+        unitItems.forEach(it => {
+          const t = document.getElementById('qty2_' + bid + '_' + items.indexOf(it));
+          rowTotal += calcAmt(parseInt(t ? t.dataset.orig : 0, 10) || 0, it);
+        });
+        document.getElementById('total2u_' + bid).innerHTML = '<b>' + fmt(Math.round(rowTotal)) + '</b>';
+        updateTab2Totals(items, packItems, unitItems, calcAmt);
+      });
+    });
+  });
+}
+
+function calcAmtTab2(q, item) {
+  if (!item.perPack) return q * item.price;
+  return (q / item.perPack) * item.price;
+}
+
+function updateTab2Totals(items, packItems, unitItems, calcAmt) {
+  // PACK 품목 합계 갱신
+  let packGrand = 0;
+  packItems.forEach(item => {
+    const gi = items.indexOf(item);
+    let sumQ = 0;
+    document.querySelectorAll('#tbody_tab2_pack td.editable[data-item="' + item.db + '"]').forEach(td => {
+      sumQ += parseInt(td.dataset.orig, 10) || 0;
+    });
+    const sumAmt = Math.round(calcAmt(sumQ, item));
+    packGrand += sumAmt;
+    document.getElementById('sum2_qty_'  + gi).textContent = fmt(sumQ);
+    document.getElementById('sum2_pack_' + gi).textContent = (sumQ > 0 ? sumQ / item.perPack : 0).toFixed(3);
+    document.getElementById('sum2_amt_'  + gi).textContent = fmt(sumAmt);
+  });
+  document.getElementById('sum2_pack_total').innerHTML = '<b>' + fmt(packGrand) + '</b>';
+
+  // 낱개 품목 합계 갱신
+  let unitGrand = 0;
+  unitItems.forEach(item => {
+    const gi = items.indexOf(item);
+    let sumQ = 0;
+    document.querySelectorAll('#tbody_tab2_unit td.editable[data-item="' + item.db + '"]').forEach(td => {
+      sumQ += parseInt(td.dataset.orig, 10) || 0;
+    });
+    const sumAmt = Math.round(calcAmt(sumQ, item));
+    unitGrand += sumAmt;
+    document.getElementById('sum2_qty_' + gi).textContent = fmt(sumQ);
+  });
+  document.getElementById('sum2_unit_total').innerHTML = '<b>' + fmt(Math.round(unitGrand)) + '</b>';
+}
+
+function updateSimpleTotals2(tbodyId, items, qPfx, aPfx, totalId) {
+  let grand = 0;
+  items.forEach((item, idx) => {
+    let sumQ = 0;
+    document.querySelectorAll('#' + tbodyId + ' td.editable[data-item="' + (item.db||item.name) + '"]').forEach(td => {
+      sumQ += parseInt(td.dataset.orig, 10) || 0;
+    });
+    const sumA = sumQ * item.price;
+    grand += sumA;
+    const qEl = document.getElementById(qPfx + idx);
+    const aEl = document.getElementById(aPfx + idx);
+    if (qEl) qEl.textContent = fmt(sumQ);
+    if (aEl) aEl.textContent = fmt(sumA);
+  });
+  const tEl = document.getElementById(totalId);
+  if (tEl) tEl.innerHTML = '<b>' + fmt(grand) + '</b>';
+}
+
+// ── 탭3: 대성공구 후드 ──
+function renderTab3_DaesungHood() {
+  const items = [
+    { db: 'pb1', label: 'PB-1 세정제(600ml)', price: 1500 },
+    { db: 'tape', label: '은박테이프', price: 5200 },
+    { db: 'flex', label: '알루미늄 후렉시블(100mm×10M)', price: 15500 },
+    { db: 'reducer', label: '환기자재 레듀샤(125mm-100mm)', price: 2500 },
+  ];
+  const { users, hoods } = allData;
+  let totals = items.map(() => 0);
+
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량 셀을 클릭하면 수정할 수 있습니다.</p>
+  <table><thead>
+    <tr>
+      <th rowspan="2" class="left" style="min-width:150px;">법인명</th>
+      <th rowspan="2" class="sub">구분</th>
+      ${items.map(i => `<th class="sub" style="font-size:11px;">${i.label}<br>(${fmt(i.price)}원)✎</th>`).join('')}
+      <th rowspan="2">합계금액</th>
+    </tr>
+  </thead><tbody id="tbody_tab3">`;
+  html += `<tr class="total-row"><td class="left sticky-col">단가</td><td class="sticky-col2"></td>${items.map(i=>`<td>${fmt(i.price)}</td>`).join('')}<td></td></tr>`;
+
+  users.forEach(u => {
+    const hood = hoods.find(h => h.branch_id === u.username);
+    const qtys = items.map((item, idx) => { const q = Number((hood && hood[item.db]) || 0); totals[idx] += q; return q; });
+    const amounts = qtys.map((q, idx) => q * items[idx].price);
+    const rowTotal = amounts.reduce((a,b) => a+b, 0);
+    if (qtys.every(q => q === 0)) return;
+    html += `<tr>
+      <td class="left">${u.branch_name}</td><td class="sticky-col2">수량</td>
+      ${qtys.map((q, idx) => {
+        const isModified = modifiedCells[u.username+'|hood|'+items[idx].db] !== undefined;
+        return `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${items[idx].db}" data-field="hood" data-orig="${q}" data-price="${items[idx].price}">${fmt(q)}</td>`;
+      }).join('')}
+      <td class="amount" id="total3_${u.username}"><b>${fmt(rowTotal)}</b></td>
+    </tr>`;
+  });
+
+  const totalAmounts = totals.map((q,idx) => q * items[idx].price);
+  const totalGrand = totalAmounts.reduce((a,b)=>a+b,0);
+  html += `<tr class="total-row"><td class="left">계</td><td class="sticky-col2">수량</td>
+    ${totals.map((q,idx) => `<td id="sum3_qty_${idx}">${fmt(q)}</td>`).join('')}
+    <td class="amount" id="sum3_total"><b>${fmt(totalGrand)}</b></td>
+  </tr>
+  <tr class="total-row"><td class="sticky-col">금액</td><td class="sticky-col2"></td>
+    ${totalAmounts.map((a,idx) => `<td class="amount" id="sum3_amt_${idx}">${fmt(a)}</td>`).join('')}
+    <td class="amount"><b>총금액: <span id="sum3_grand">${fmt(totalGrand)}</span></b></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tab3').innerHTML = wrapAndFreeze(html);
+
+  // hood_applications 테이블 수정
+  document.querySelectorAll('#tbody_tab3 td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const field = td.dataset.item; // pb1, tape, flex, reducer
+      const origVal = parseInt(td.dataset.orig, 10) || 0;
+      const price = parseInt(td.dataset.price, 10) || 0;
+      const idx = items.findIndex(i => i.db === field);
+      makeEditable(td, branchId, 'hood', field, origVal, async function(cell, bid, newVal) {
+        td.dataset.orig = newVal;
+        modifiedCells[bid + '|hood|' + field] = newVal;
+        await saveHoodToDb(bid, field, newVal);
+        // 행 합계
+        let rowTotal = 0;
+        items.forEach(it => {
+          const t = document.querySelector(`#tbody_tab3 td.editable[data-branch="${bid}"][data-item="${it.db}"]`);
+          rowTotal += (parseInt(t ? t.dataset.orig : 0) || 0) * it.price;
+        });
+        document.getElementById('total3_' + bid).innerHTML = '<b>' + fmt(rowTotal) + '</b>';
+        // 컬럼 합계
+        items.forEach((it, i) => {
+          let sumQ = 0, sumA = 0;
+          document.querySelectorAll(`#tbody_tab3 td.editable[data-item="${it.db}"]`).forEach(t => {
+            sumQ += parseInt(t.dataset.orig, 10) || 0;
+          });
+          sumA = sumQ * it.price;
+          document.getElementById('sum3_qty_' + i).textContent = fmt(sumQ);
+          document.getElementById('sum3_amt_' + i).textContent = fmt(sumA);
+        });
+        let grand = 0;
+        for (let i = 0; i < items.length; i++) {
+          grand += parseInt(document.getElementById('sum3_amt_' + i).textContent.replace(/,/g,'')) || 0;
+        }
+        document.getElementById('sum3_total').innerHTML = '<b>' + fmt(grand) + '</b>';
+        document.getElementById('sum3_grand').textContent = fmt(grand);
+      });
+    });
+  });
+}
+
+// ── 탭4: 서비스봉투/폼테이프 ──
+function renderTab4_ServiceBag() {
+  const items = [
+    { db: 'service_bag', label: '서비스봉투(100EA, 1묶음)' },
+    { db: 'form_tape', label: '전기레인지 폼테이프(4EA, 1SET)' },
+  ];
+  const { users, hoods } = allData;
+  let totals = [0, 0];
+
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량 셀을 클릭하면 수정할 수 있습니다.</p>
+  <table><thead>
+    <tr>
+      <th class="left" style="min-width:160px;">법인명</th>
+      <th class="sub">서비스봉투<br>(100EA, 1묶음)✎</th>
+      <th class="sub">전기레인지 폼테이프<br>(4EA, 1SET)✎</th>
+    </tr>
+  </thead><tbody id="tbody_tab4">`;
+
+  users.forEach(u => {
+    const hood = hoods.find(h => h.branch_id === u.username);
+    const qtys = items.map((item, idx) => { const q = Number((hood && hood[item.db]) || 0); totals[idx] += q; return q; });
+    if (qtys.every(q => q === 0)) return;
+    html += `<tr>
+      <td class="left">${u.branch_name}</td>
+      ${qtys.map((q, idx) => {
+        const isModified = modifiedCells[u.username+'|hood|'+items[idx].db] !== undefined;
+        return `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${items[idx].db}" data-field="hood" data-orig="${q}">${fmt(q)}</td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html += `<tr class="total-row"><td class="left">합계</td>
+    ${totals.map((q,idx) => `<td id="sum4_${idx}">${fmt(q)}</td>`).join('')}
+  </tr></tbody></table>`;
+
+  document.getElementById('tab4').innerHTML = wrapAndFreeze(html);
+
+  document.querySelectorAll('#tbody_tab4 td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const field = td.dataset.item;
+      const origVal = parseInt(td.dataset.orig, 10) || 0;
+      const idx = items.findIndex(i => i.db === field);
+      makeEditable(td, branchId, 'hood', field, origVal, async function(cell, bid, newVal) {
+        td.dataset.orig = newVal;
+        modifiedCells[bid + '|hood|' + field] = newVal;
+        await saveHoodToDb(bid, field, newVal);
+        let sumQ = 0;
+        document.querySelectorAll(`#tbody_tab4 td.editable[data-item="${field}"]`).forEach(t => {
+          sumQ += parseInt(t.dataset.orig, 10) || 0;
+        });
+        document.getElementById('sum4_' + idx).textContent = fmt(sumQ);
+      });
+    });
+  });
+}
+
+// ── 탭5: 신원튜브 (튜빙선 + 배수호스) ──
+function renderTab5_Shinwon() {
+  const tubingItems = [
+    { db: '튜빙선(1P)', label: '튜빙선(1P)', price: 24000 },
+    { db: '튜빙선(2P)', label: '튜빙선(2P)', price: 21500 },
+    { db: '튜빙선(1P, 3/8)', label: '튜빙선(1P,3/8)', price: 19750 },
+    { db: '튜빙선_ACS (LLD T/B 1/2)', label: '튜빙선_ACS(LLD T/B 1/2)', price: 25000 },
+  ];
+  const { users, apps } = allData;
+  let totals = tubingItems.map(() => 0);
+  let drainTotal = 0;
+
+  let html = `<p style="font-size:12px; color:#e67e22; margin:0 0 6px;">💡 수량 셀을 클릭하면 수정할 수 있습니다.</p>
+  <b style="font-size:13px;">▶ 내열 튜빙선 발주 수량</b>
+  <table><thead>
+    <tr>
+      <th rowspan="2" class="left" style="min-width:160px;">법인명</th>
+      ${tubingItems.map(i => `<th colspan="2" class="sub">${i.label}<br><span style="font-size:11px;">(${fmt(i.price)}원)✎</span></th>`).join('')}
+      <th rowspan="2">합계금액</th>
+    </tr>
+    <tr>${tubingItems.map(() => '<th class="sub">수량</th><th class="sub">금액</th>').join('')}</tr>
+  </thead><tbody id="tbody_tab5_tubing">`;
+
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const qtys = tubingItems.map((item, idx) => { const q = getItemVal(app, item.db, 'apply'); totals[idx] += q; return q; });
+    const amounts = qtys.map((q, idx) => q * tubingItems[idx].price);
+    const rowTotal = amounts.reduce((a,b) => a+b, 0);
+    if (qtys.every(q => q === 0)) return;
+    html += `<tr>
+      <td class="left">${u.branch_name}</td>
+      ${qtys.map((q, idx) => {
+        const isModified = modifiedCells[u.username+'|'+tubingItems[idx].db+'|apply'] !== undefined;
+        return `<td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="${tubingItems[idx].db}" data-field="apply" data-orig="${q}" data-price="${tubingItems[idx].price}">${fmt(q)}</td>
+        <td class="amount" id="amt5_${u.username}_${idx}">${fmt(amounts[idx])}</td>`;
+      }).join('')}
+      <td class="amount" id="total5_${u.username}"><b>${fmt(rowTotal)}</b></td>
+    </tr>`;
+  });
+
+  const totalAmounts = totals.map((q,idx) => q * tubingItems[idx].price);
+  html += `<tr class="total-row"><td class="left">합계</td>
+    ${totals.map((q,idx) => `<td id="sum5_qty_${idx}">${fmt(q)}</td><td class="amount" id="sum5_amt_${idx}">${fmt(totalAmounts[idx])}</td>`).join('')}
+    <td class="amount" id="sum5_total"><b>${fmt(totalAmounts.reduce((a,b)=>a+b,0))}</b></td>
+  </tr></tbody></table>`;
+
+  // 배수호스
+  html += `<br><b style="font-size:13px;">▶ 배수호스 발주 수량 (단가: 900원)</b>
+  <table><thead>
+    <tr>
+      <th class="left" style="min-width:160px;">센터명</th>
+      <th class="sub">배수호스 수량✎</th>
+      <th class="sub">금액</th>
+    </tr>
+  </thead><tbody id="tbody_tab5_drain">`;
+
+  users.forEach(u => {
+    const app = apps.find(a => a.branch_id === u.username);
+    const q = getItemVal(app, '배수호스', 'apply') || getItemVal(app, 'CP-AJS 배수호스', 'apply');
+    drainTotal += q;
+    if (q === 0) return;
+    const isModified = modifiedCells[u.username+'|배수호스|apply'] !== undefined;
+    html += `<tr>
+      <td class="left">${u.branch_name}</td>
+      <td class="editable${isModified?' modified':''}" data-branch="${u.username}" data-item="배수호스" data-field="apply" data-orig="${q}" data-price="900">${fmt(q)}</td>
+      <td class="amount" id="drain_amt_${u.username}">${fmt(q * 900)}</td>
+    </tr>`;
+  });
+
+  html += `<tr class="total-row"><td class="left">합계</td>
+    <td id="sum5_drain_qty">${fmt(drainTotal)}</td>
+    <td class="amount" id="sum5_drain_amt"><b>${fmt(drainTotal * 900)}</b></td>
+  </tr></tbody></table>`;
+
+  document.getElementById('tab5').innerHTML = wrapAndFreeze(html);
+
+  // 튜빙선 편집
+  registerSimpleEdit('tbody_tab5_tubing', 'applications', tubingItems.map(i=>({name:i.db,price:i.price})), 'apply',
+    (bid, idx, newQ) => {
+      document.getElementById('amt5_' + bid + '_' + idx).textContent = fmt(newQ * tubingItems[idx].price);
+      let rowTotal = 0;
+      tubingItems.forEach((it, i) => {
+        const td = document.querySelector(`#tbody_tab5_tubing td.editable[data-branch="${bid}"][data-item="${it.db}"]`);
+        rowTotal += (parseInt(td ? td.dataset.orig : 0) || 0) * it.price;
+      });
+      document.getElementById('total5_' + bid).innerHTML = '<b>' + fmt(rowTotal) + '</b>';
+      updateSimpleTotals('tbody_tab5_tubing', tubingItems.map(i=>({name:i.db,price:i.price})), 'sum5_qty_', 'sum5_amt_', 'sum5_total');
+    }
+  );
+
+  // 배수호스 편집
+  document.querySelectorAll('#tbody_tab5_drain td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const origVal = parseInt(td.dataset.orig, 10) || 0;
+      makeEditable(td, branchId, '배수호스', 'apply', origVal, async function(cell, bid, newVal) {
+        td.dataset.orig = newVal;
+        document.getElementById('drain_amt_' + bid).textContent = fmt(newVal * 900);
+        let sumQ = 0;
+        document.querySelectorAll('#tbody_tab5_drain td.editable').forEach(t => { sumQ += parseInt(t.dataset.orig,10)||0; });
+        document.getElementById('sum5_drain_qty').textContent = fmt(sumQ);
+        document.getElementById('sum5_drain_amt').innerHTML = '<b>' + fmt(sumQ * 900) + '</b>';
+      });
+    });
+  });
+}
+
+// ───────────────────────────────────────────────
+// 공통 헬퍼 - applications 테이블 수정 이벤트 등록
+// ───────────────────────────────────────────────
+function registerSimpleEdit(tbodyId, table, items, field, onUpdate) {
+  document.querySelectorAll('#' + tbodyId + ' td.editable').forEach(td => {
+    td.addEventListener('click', function() {
+      const branchId = td.dataset.branch;
+      const itemName = td.dataset.item;
+      const origVal = parseInt(td.dataset.orig, 10) || 0;
+      const idx = items.findIndex(i => (i.name||i.db) === itemName);
+      makeEditable(td, branchId, itemName, field, origVal, function(cell, bid, newVal) {
+        td.dataset.orig = newVal;
+        if (onUpdate) onUpdate(bid, idx, newVal);
+      });
+    });
+  });
+}
+
+function updateSimpleTotals(tbodyId, items, qPfx, aPfx, totalId) {
+  let grand = 0;
+  items.forEach((item, idx) => {
+    let sumQ = 0;
+    document.querySelectorAll('#' + tbodyId + ' td.editable[data-item="' + (item.name||item.db) + '"]').forEach(td => {
+      sumQ += parseInt(td.dataset.orig, 10) || 0;
+    });
+    const sumA = sumQ * item.price;
+    grand += sumA;
+    const qEl = document.getElementById(qPfx + idx);
+    const aEl = document.getElementById(aPfx + idx);
+    if (qEl) qEl.textContent = fmt(sumQ);
+    if (aEl) aEl.textContent = fmt(sumA);
+  });
+  const tEl = document.getElementById(totalId);
+  if (tEl) tEl.innerHTML = '<b>' + fmt(grand) + '</b>';
+}
+
+// ───────────────────────────────────────────────
+// 탭 전환
+// ───────────────────────────────────────────────
+// ───────────────────────────────────────────────
+// 탭 6: 금액 합산
+// ───────────────────────────────────────────────
+function renderTab6_Summary() {
+  const { users, apps, hoods } = allData;
+
+  // ── 품목 정의 (단가 있는 품목만) ──
+  // ── 수량 조회 헬퍼 ──
+  const getAppQty = (itemName, field='apply') => {
+    let t=0;
+    users.forEach(u => {
+      const a = apps.find(x => x.branch_id === u.username);
+      const p = a && a.items ? a.items.find(i => i.itemName === itemName) : null;
+      t += p ? Number(p[field] || 0) : 0;
+    });
+    return t;
+  };
+  const getHoodQty = (field) => { let t=0; hoods.forEach(h=>{ t+=Number(h[field]||0); }); return t; };
+
+  // ── 아이존: BOX 단위 ──
+  const aizoneItems = [
+    { label:'건식티슈', packsPerBox:100, price:83000, getPackQty:()=>getAppQty('건식티슈','packApply') },
+    { label:'습식티슈', packsPerBox:50,  price:46500, getPackQty:()=>getAppQty('습식티슈','packApply') },
+    { label:'위생장갑', packsPerBox:30,  price:53100, getPackQty:()=>getAppQty('위생장갑','packApply') },
+  ];
+  aizoneItems.forEach(it => {
+    const pack = it.getPackQty();
+    it._pack = pack;
+    it._box  = Math.ceil(pack / it.packsPerBox);
+    it._amt  = it._box * it.price;
+  });
+
+  // ── 에프엔시스 ──
+  const fnsysItems = [
+    { label:'고강도 2호', price:485,  getQty:()=>getAppQty('신형고강도(흰색) 2호') },
+    { label:'고강도 3호', price:758,  getQty:()=>getAppQty('신형고강도(흰색) 3호') },
+  ];
+  fnsysItems.forEach(it => { it._qty=it.getQty(); it._amt=it._qty*it.price; });
+
+  // ── 대성공구 잡자재: perPack 있는 것(PACK), 없는 것(EA) ──
+  const misc2Pack = [
+    { label:'피스',           price:4300,  perPack:1000, getQty:()=>getAppQty('피스') },
+    { label:'철판피스',       price:3800,  perPack:1000, getQty:()=>getAppQty('철판피스') },
+    { label:'새들(4N)',       price:7800,  perPack:1000, getQty:()=>getAppQty('새들(4N)') },
+    { label:'새들(6N)',       price:11500, perPack:1000, getQty:()=>getAppQty('새들(6N)') },
+    { label:'케이블타이(대)', price:15000, perPack:1000, getQty:()=>getAppQty('케이블타이(대)') },
+    { label:'케이블타이(중)', price:3400,  perPack:1000, getQty:()=>getAppQty('케이블타이(소)') },
+    { label:'마운팅베이스',   price:19500, perPack:1000, getQty:()=>getAppQty('마운팅베이스') },
+    { label:'배수용큐방',     price:40000, perPack:1000, getQty:()=>getAppQty('배수용큐방') },
+    { label:'천공앙카',       price:1100,  perPack:10,   getQty:()=>getAppQty('천공앙카') },
+  ];
+  misc2Pack.forEach(it => { it._ea=it.getQty(); it._pack=parseFloat((it._ea/it.perPack).toFixed(3)); it._amt=Math.round(it._pack*it.price); });
+
+  const misc2EA = [
+    { label:'테프론',     price:300,  getQty:()=>getAppQty('테프론') },
+    { label:'토끼코크',   price:1500, getQty:()=>getAppQty('토끼코크') },
+    { label:'단 니플',    price:900,  getQty:()=>getAppQty('단 니플') },
+    { label:'연결 니플',  price:900,  getQty:()=>getAppQty('연결니플') },
+    { label:'전기테이프', price:500,  getQty:()=>getAppQty('전기테이프') },
+  ];
+  misc2EA.forEach(it => { it._qty=it.getQty(); it._amt=it._qty*it.price; });
+
+  // ── 대성공구 후드 ──
+  const hoodItems = [
+    { label:'PB-1 세정제',    price:1500,  getQty:()=>getHoodQty('pb1') },
+    { label:'은박테이프',     price:5200,  getQty:()=>getHoodQty('tape') },
+    { label:'알루미늄 후렉시블', price:15500, getQty:()=>getHoodQty('flex') },
+    { label:'환기자재 레듀샤', price:2500,  getQty:()=>getHoodQty('reducer') },
+  ];
+  hoodItems.forEach(it => { it._qty=it.getQty(); it._amt=it._qty*it.price; });
+
+  // ── 신원튜브 ──
+  const shinwonItems = [
+    { label:'튜빙선(1P)',     price:24000, getQty:()=>getAppQty('튜빙선(1P)') },
+    { label:'튜빙선(2P)',     price:21500, getQty:()=>getAppQty('튜빙선(2P)') },
+    { label:'튜빙선(1P,3/8)', price:19750, getQty:()=>getAppQty('튜빙선(1P, 3/8)') },
+    { label:'튜빙선 ACS(LLD)',price:25000, getQty:()=>getAppQty('튜빙선_ACS (LLD T/B 1/2)') },
+    { label:'배수호스',       price:900,   getQty:()=>getAppQty('배수호스') },
+  ];
+  shinwonItems.forEach(it => { it._qty=it.getQty(); it._amt=it._qty*it.price; });
+
+  // ── 전체 합계 ──
+  const grandTotal =
+    aizoneItems.reduce((s,i)=>s+i._amt,0) +
+    fnsysItems.reduce((s,i)=>s+i._amt,0) +
+    misc2Pack.reduce((s,i)=>s+i._amt,0) +
+    misc2EA.reduce((s,i)=>s+i._amt,0) +
+    hoodItems.reduce((s,i)=>s+i._amt,0) +
+    shinwonItems.reduce((s,i)=>s+i._amt,0);
+
+  // ── 렌더링 ──
+  const sub = (txt) => `<tr style="background:#f0f0f0; font-weight:bold;">
+    <td class="sticky-col" style="background:#e0e0e0;"></td>
+    <td colspan="5" style="text-align:right; padding-right:8px; font-size:12px; color:#c0392b;">${txt} 소계: ${fmt(eval(txt.replace('아이존','aizoneItems').replace('에프엔시스','fnsysItems').replace('대성공구(후드)','hoodItems').replace('신원튜브','shinwonItems')+'.reduce((s,i)=>s+i._amt,0)'))  }원</td>
+  </tr>`;
+
+  // 소계 계산용
+  const groupTotals = {
+    '아이존': aizoneItems.reduce((s,i)=>s+i._amt,0),
+    '에프엔시스': fnsysItems.reduce((s,i)=>s+i._amt,0),
+    '대성공구(잡자재)': misc2Pack.reduce((s,i)=>s+i._amt,0)+misc2EA.reduce((s,i)=>s+i._amt,0),
+    '대성공구(후드)': hoodItems.reduce((s,i)=>s+i._amt,0),
+    '신원튜브': shinwonItems.reduce((s,i)=>s+i._amt,0),
+  };
+
+  const groupRow = (label, color) => `<td class="sticky-col" rowspan="ROWSPAN"
+    style="background:${color}; font-weight:bold; font-size:12px; vertical-align:middle; white-space:nowrap;">${label}</td>`;
+
+  let html = `
+  <div style="margin-bottom:12px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+    <span style="font-size:15px; font-weight:bold; color:#1f3a5a;">📊 전체 품목 금액 합산</span>
+    <span style="font-size:13px; color:#666;">설치법인 합산 기준</span>
+    <span style="font-size:15px; font-weight:bold; color:#c0392b; margin-left:auto;">총 합계: ${fmt(grandTotal)}원</span>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th class="sticky-col" style="min-width:90px;">공급업체</th>
+        <th style="min-width:150px;">품목</th>
+        <th style="min-width:70px;">단가(원)</th>
+        <th style="min-width:120px;">수량</th>
+        <th style="min-width:100px;">금액(원)</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  // ── 헬퍼: 5칸 고정 ──
+  // col1=공급업체(sticky), col2=품목, col3=단가, col4=수량, col5=금액
+  const dataRow = (col1, label, price, qty, amt, amtColor='#1a5276') =>
+    `${col1}<td style="text-align:left;padding-left:10px;">${label}</td><td>${price}</td><td>${qty}</td><td class="amount" style="font-weight:bold;color:${amt>0?amtColor:'#999'};">${fmt(amt)}</td>`;
+
+  // 소계: sticky(1)+빈(1)+빈(1)+소계텍스트(1)+금액(1)+빈(1) = 6칸
+  // 소계: sticky(1)+빈(1)+소계텍스트(1)+금액(1)+빈(1) = 5칸
+  const subRow = (bg, label, total) =>
+    `<tr style="background:${bg};font-weight:bold;">
+      <td class="sticky-col" style="background:${bg};"></td>
+      <td></td>
+      <td style="text-align:right;padding-right:8px;">${label} 소계</td>
+      <td class="amount" style="color:#c0392b;">${fmt(total)}</td>
+      
+    </tr>`;
+
+  // 구분 헤더행(공급업체 sticky rowspan중): colspan4 = 나머지 4칸
+  const sectRow = (bg, txt) =>
+    `<tr><td colspan="4" style="background:${bg};font-size:11px;color:#856404;padding:3px 8px;font-weight:bold;">${txt}</td></tr>`;
+
+  // 아이존 (col4=PACK수량, col5=BOX수량)
+  aizoneItems.forEach((it, gi) => {
+    const grpTd = gi===0 ? `<td class="sticky-col" rowspan="${aizoneItems.length+1}" style="background:#e3f2fd;font-weight:bold;font-size:12px;vertical-align:middle;">아이존</td>` : '';
+    html += `<tr>${dataRow(grpTd, it.label, fmt(it.price)+'원/BOX', fmt(it._pack)+' PACK / '+fmt(it._box)+' BOX', it._amt)}</tr>`;
+  });
+  html += subRow('#dceefb', '아이존', groupTotals['아이존']);
+
+  // 에프엔시스 (col4=EA수량, col5=-)
+  fnsysItems.forEach((it, gi) => {
+    const grpTd = gi===0 ? `<td class="sticky-col" rowspan="${fnsysItems.length+1}" style="background:#f3e5f5;font-weight:bold;font-size:12px;vertical-align:middle;">에프엔시스</td>` : '';
+    html += `<tr>${dataRow(grpTd, it.label, fmt(it.price)+'원/EA', fmt(it._qty)+' EA', it._amt)}</tr>`;
+  });
+  html += subRow('#ede7f6', '에프엔시스', groupTotals['에프엔시스']);
+
+  // 대성공구 잡자재
+  const misc2Rows = misc2Pack.length + misc2EA.length + 2; // +2: 구분 헤더 행 2개
+  html += `<tr>
+    <td class="sticky-col" rowspan="${misc2Rows+1}" style="background:#fff8e1;font-weight:bold;font-size:12px;vertical-align:middle;">대성공구<br>(잡자재)</td>
+    <td colspan="4" style="background:#fff3cd;font-size:11px;color:#856404;padding:3px 8px;font-weight:bold;">▶ PACK 단위 품목 (단가: 1PACK 기준)</td>
+  </tr>`;
+  misc2Pack.forEach(it => {
+    html += `<tr>${dataRow('', it.label, fmt(it.price)+'원/PACK', fmt(it._ea)+' EA / '+it._pack+' PACK', it._amt)}</tr>`;
+  });
+  html += `<tr>
+    <td colspan="4" style="background:#fff3cd;font-size:11px;color:#856404;padding:3px 8px;font-weight:bold;">▶ 낱개(EA) 단위 품목</td>
+  </tr>`;
+  misc2EA.forEach(it => {
+    html += `<tr>${dataRow('', it.label, fmt(it.price)+'원/EA', fmt(it._qty)+' EA', it._amt)}</tr>`;
+  });
+  html += subRow('#fff0b3', '대성공구(잡자재)', groupTotals['대성공구(잡자재)']);
+
+  // 대성공구 후드
+  hoodItems.forEach((it, gi) => {
+    const grpTd = gi===0 ? `<td class="sticky-col" rowspan="${hoodItems.length+1}" style="background:#fce4ec;font-weight:bold;font-size:12px;vertical-align:middle;">대성공구<br>(후드)</td>` : '';
+    html += `<tr>${dataRow(grpTd, it.label, fmt(it.price)+'원/EA', fmt(it._qty)+' EA', it._amt)}</tr>`;
+  });
+  html += subRow('#fce4ec', '대성공구(후드)', groupTotals['대성공구(후드)']);
+
+  // 신원튜브
+  shinwonItems.forEach((it, gi) => {
+    const grpTd = gi===0 ? `<td class="sticky-col" rowspan="${shinwonItems.length+1}" style="background:#e8f5e9;font-weight:bold;font-size:12px;vertical-align:middle;">신원튜브</td>` : '';
+    html += `<tr>${dataRow(grpTd, it.label, fmt(it.price)+'원/EA', fmt(it._qty)+' EA', it._amt)}</tr>`;
+  });
+  html += subRow('#c8e6c9', '신원튜브', groupTotals['신원튜브']);
+
+  html += `
+    <tr style="background:#1f3a5a;color:#fff;font-weight:bold;font-size:13px;">
+      <td class="sticky-col" style="background:#1f3a5a;">전체 합계</td>
+      <td></td>
+      <td style="text-align:right;padding-right:8px;color:#fff;">총 발주 금액</td>
+      <td class="amount" style="color:#fff;">${fmt(grandTotal)}</td>
+      <td></td>
+    </tr>
+    </tbody>
+  </table>
+  </div>`;
+
+  document.getElementById('tab6').innerHTML = html;
+}
+
+function showTab(idx) {
+  currentTab = idx;
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.tab-content').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+}
+
+// ───────────────────────────────────────────────
+// 엑셀 다운로드
+// ───────────────────────────────────────────────
+const TAB_NAMES = ['아이존', '에프엔시스', '대성공구(잡자재)', '대성공구(후드)', '서비스봉투_폼테이프', '신원튜브'];
+
+function tableToAoa(tabIdx) {
+  const el = document.getElementById('tab' + tabIdx);
+  const tables = el.querySelectorAll('table');
+  let result = [];
+  tables.forEach(table => {
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('th, td');
+      result.push(Array.from(cells).map(c => c.innerText.trim()));
+    });
+    result.push([]); // 테이블 간 빈 행
+  });
+  return result;
+}
+
+function downloadCurrentTab() {
+  const aoa = tableToAoa(currentTab);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, TAB_NAMES[currentTab]);
+  XLSX.writeFile(wb, TAB_NAMES[currentTab] + '_발주서_20' + YEAR + '년' + MONTH + '월.xlsx');
+}
+
+function downloadAllTabs() {
+  const wb = XLSX.utils.book_new();
+  TAB_NAMES.forEach((name, idx) => {
+    const aoa = tableToAoa(idx);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSX.writeFile(wb, '전체_발주서_20' + YEAR + '년' + MONTH + '월.xlsx');
+}
+</script>
+</body>
+</html>
