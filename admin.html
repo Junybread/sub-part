@@ -191,6 +191,7 @@ th {
           <th>권한</th>
           <th>계정수</th>
           <th>T/O</th>
+          <th style="width:80px;"></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -231,6 +232,7 @@ th {
           <th style="padding:7px 10px; text-align:left;">담당자</th>
           <th style="padding:7px 10px; text-align:left;">연락처</th>
           <th style="padding:7px 10px; text-align:left;">주소</th>
+          <th style="padding:7px 6px; width:70px;"></th>
           <th style="padding:7px 6px; width:60px;">삭제</th>
         </tr>
       </thead>
@@ -801,33 +803,61 @@ async function renderUserTable() {
         tr.appendChild(td);
       });
 
-      // 계정수 — 인라인 수정 가능
+      // 계정수
       const acctTd = document.createElement('td');
       acctTd.style.cssText = 'padding:4px 6px; text-align:center;';
       const acctInput = document.createElement('input');
       acctInput.type = 'number';
       acctInput.value = u.acct || 0;
       acctInput.min = 0;
-      acctInput.style.cssText = 'width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; text-align:center;';
-      acctInput.addEventListener('change', function() {
-        saveUserField(u.username, 'acct', parseInt(this.value) || 0);
-      });
+      acctInput.disabled = true;
+      acctInput.style.cssText = 'width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; text-align:center; background:#f5f5f5;';
       acctTd.appendChild(acctInput);
       tr.appendChild(acctTd);
 
-      // T/O — 인라인 수정 가능
+      // T/O
       const toTd = document.createElement('td');
       toTd.style.cssText = 'padding:4px 6px; text-align:center;';
       const toInput = document.createElement('input');
       toInput.type = 'number';
       toInput.value = u.to_count || 0;
       toInput.min = 0;
-      toInput.style.cssText = 'width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; text-align:center;';
-      toInput.addEventListener('change', function() {
-        saveUserField(u.username, 'to_count', parseInt(this.value) || 0);
-      });
+      toInput.disabled = true;
+      toInput.style.cssText = 'width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; text-align:center; background:#f5f5f5;';
       toTd.appendChild(toInput);
       tr.appendChild(toTd);
+
+      // 수정/저장 버튼
+      const btnTd = document.createElement('td');
+      btnTd.style.cssText = 'padding:4px 6px; text-align:center;';
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '수정';
+      editBtn.style.cssText = 'padding:3px 10px; background:#1f3a5a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;';
+      editBtn.addEventListener('click', function() {
+        const isEditing = acctInput.disabled;
+        if (isEditing) {
+          // 수정 모드 진입
+          acctInput.disabled = false; acctInput.style.background = '#fffde7';
+          toInput.disabled   = false; toInput.style.background   = '#fffde7';
+          editBtn.textContent = '저장';
+          editBtn.style.background = '#28a745';
+        } else {
+          // 저장
+          editBtn.disabled = true; editBtn.textContent = '저장 중...';
+          Promise.all([
+            saveUserField(u.username, 'acct',     parseInt(acctInput.value) || 0),
+            saveUserField(u.username, 'to_count', parseInt(toInput.value)   || 0),
+          ]).then(function() {
+            acctInput.disabled = true; acctInput.style.background = '#f5f5f5';
+            toInput.disabled   = true; toInput.style.background   = '#f5f5f5';
+            editBtn.textContent = '수정';
+            editBtn.style.background = '#1f3a5a';
+            editBtn.disabled = false;
+          });
+        }
+      });
+      btnTd.appendChild(editBtn);
+      tr.appendChild(btnTd);
 
       tbody.appendChild(tr);
     });
@@ -947,29 +977,25 @@ async function loadDeliveryList() {
     branchTd.textContent = row.branch || '';
     tr.appendChild(branchTd);
 
-    // 담당자 — 수정 가능
+    // 담당자
     const managerTd = document.createElement('td');
     managerTd.style.cssText = 'padding:4px 6px;';
     const managerInput = document.createElement('input');
     managerInput.type = 'text';
     managerInput.value = row.manager || '';
-    managerInput.style.cssText = 'width:90px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px;';
-    managerInput.addEventListener('change', function() {
-      saveDeliveryField(row.id, 'manager', this.value.trim());
-    });
+    managerInput.disabled = true;
+    managerInput.style.cssText = 'width:90px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; background:#f5f5f5;';
     managerTd.appendChild(managerInput);
     tr.appendChild(managerTd);
 
-    // 연락처 — 수정 가능
+    // 연락처
     const phoneTd = document.createElement('td');
     phoneTd.style.cssText = 'padding:4px 6px;';
     const phoneInput = document.createElement('input');
     phoneInput.type = 'text';
     phoneInput.value = row.phone || '';
-    phoneInput.style.cssText = 'width:110px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px;';
-    phoneInput.addEventListener('change', function() {
-      saveDeliveryField(row.id, 'phone', this.value.trim());
-    });
+    phoneInput.disabled = true;
+    phoneInput.style.cssText = 'width:110px; padding:3px 5px; border:1px solid #ccc; border-radius:3px; font-size:12px; background:#f5f5f5;';
     phoneTd.appendChild(phoneInput);
     tr.appendChild(phoneTd);
 
@@ -978,6 +1004,36 @@ async function loadDeliveryList() {
     addressTd.style.cssText = 'padding:6px 10px; font-size:12px;';
     addressTd.textContent = row.address || '';
     tr.appendChild(addressTd);
+
+    // 수정/저장 버튼
+    const editTd = document.createElement('td');
+    editTd.style.cssText = 'padding:4px 6px; text-align:center;';
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '수정';
+    editBtn.style.cssText = 'padding:3px 10px; background:#1f3a5a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px;';
+    editBtn.addEventListener('click', function() {
+      const isEditing = managerInput.disabled;
+      if (isEditing) {
+        managerInput.disabled = false; managerInput.style.background = '#fffde7';
+        phoneInput.disabled   = false; phoneInput.style.background   = '#fffde7';
+        editBtn.textContent = '저장';
+        editBtn.style.background = '#28a745';
+      } else {
+        editBtn.disabled = true; editBtn.textContent = '저장 중...';
+        Promise.all([
+          saveDeliveryField(row.id, 'manager', managerInput.value.trim()),
+          saveDeliveryField(row.id, 'phone',   phoneInput.value.trim()),
+        ]).then(function() {
+          managerInput.disabled = true; managerInput.style.background = '#f5f5f5';
+          phoneInput.disabled   = true; phoneInput.style.background   = '#f5f5f5';
+          editBtn.textContent = '수정';
+          editBtn.style.background = '#1f3a5a';
+          editBtn.disabled = false;
+        });
+      }
+    });
+    editTd.appendChild(editBtn);
+    tr.appendChild(editTd);
 
     // 삭제 버튼
     const delTd = document.createElement('td');
